@@ -4,14 +4,18 @@ import argparse
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+except ImportError:  # MT5 is a Windows terminal integration, not a unit-test dependency.
+    mt5 = None
+
 import numpy as np
 import pandas as pd
 from colorama import Fore, init
 
 init(autoreset=True)
 BLUE, CYAN, YELLOW, RED = Fore.LIGHTBLUE_EX, Fore.LIGHTCYAN_EX, Fore.LIGHTYELLOW_EX, Fore.LIGHTRED_EX
-TIMEFRAME = mt5.TIMEFRAME_H1
+TIMEFRAME = getattr(mt5, "TIMEFRAME_H1", None)
 TIMEFRAME_NAME = "H1"
 WARMUP_HOURS = 60
 ROOT = Path(__file__).resolve().parents[2]
@@ -141,6 +145,9 @@ def collect_symbol(symbol, start, end):
 
 def main():
     args = parse_args()
+    if mt5 is None:
+        print(RED + "MetaTrader5 package is required for live H1 ingestion.")
+        return 2
     start, end = utc_bounds(args.date)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     output = args.output_dir / (
