@@ -92,9 +92,10 @@ Key behaviors:
 - Interprets `--date` as a calendar date in Brasília (UTC−03:00); by default, processes the previous Brasília day.
 - Converts the local day boundaries to UTC and applies a half-open interval: `[start, end)`.
 - Stores UTC and Brasília timestamps for each candle.
+- Validates each M1 candle before persistence: finite positive prices, coherent OHLC bounds and non-negative volume/spread fields; invalid records are skipped.
 - Uses a unique key on `(symbol, timeframe, timestamp_utc)` and `INSERT OR IGNORE` to make repeated imports idempotent.
 - Upserts instrument metadata without replacing the parent row.
-- Reports processed instruments, candles found/inserted, errors and database totals.
+- Reports processed instruments, candles found/inserted, errors and database totals; rejected market records can be inspected in the per-symbol output.
 - Can optionally open DB Browser for SQLite after the run.
 
 Example (PowerShell):
@@ -140,7 +141,7 @@ If script activation is restricted, invoke the environment interpreter directly.
 python -m pytest
 ```
 
-The current automated tests cover H1 feature columns, OHLC validation and UTC date boundaries. The M1 extraction depends on a locally authenticated MT5 terminal and should be integration-tested in that environment.
+The automated tests cover H1 feature columns and OHLC validation, M1 OHLCV quality gates, SQLite idempotency and Brasília-to-UTC date boundaries. The live M1 extraction still depends on a locally authenticated MT5 terminal and should be integration-tested in that environment.
 
 ## Engineering principles
 
