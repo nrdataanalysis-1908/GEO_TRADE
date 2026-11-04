@@ -217,28 +217,43 @@ def gravar_metadados_ativo(cursor, info):
 
 
 def validar_candle(candle):
-    """Valida OHLC, finitude dos preços e volumes antes da persistência."""
+    """Valida timestamp, OHLC e contadores antes da persistência."""
     import math
 
     try:
+        timestamp = float(candle["time"])
         abertura = float(candle["open"])
         maxima = float(candle["high"])
         minima = float(candle["low"])
         fechamento = float(candle["close"])
-        volume = int(candle["tick_volume"])
-        spread = int(candle["spread"])
-        volume_real = int(candle["real_volume"])
+        contadores = tuple(
+            float(candle[key]) for key in ("tick_volume", "spread", "real_volume")
+        )
+        if any(isinstance(candle[key], bool) for key in (
+            "time", "tick_volume", "spread", "real_volume"
+        )):
+            return False
     except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+
+    if not math.isfinite(timestamp) or not timestamp.is_integer():
+        return False
+    try:
+        datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
         return False
 
     precos = (abertura, maxima, minima, fechamento)
     if not all(math.isfinite(valor) for valor in precos):
         return False
+    if not all(math.isfinite(valor) and valor >= 0 and valor.is_integer()
+               for valor in contadores):
+        return False
     if minima <= 0 or maxima < minima:
         return False
     if maxima < max(abertura, fechamento) or minima > min(abertura, fechamento):
         return False
-    return volume >= 0 and spread >= 0 and volume_real >= 0
+    return True
 
 
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
