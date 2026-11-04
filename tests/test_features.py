@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.ingestion.market_ingestion import add_features, validate_rates, utc_bounds
 
@@ -33,6 +34,12 @@ def test_ohlc_validation_rejects_invalid_bar():
     clean, rejected = validate_rates(rates)
     assert len(clean) == 39
     assert rejected == 1
+
+
+def test_h1_validation_fails_clearly_when_required_market_column_is_missing():
+    rates = sample_rates().drop(columns=["spread"])
+    with pytest.raises(ValueError, match="Missing required market columns: spread"):
+        validate_rates(rates)
 
 
 def test_utc_day_bounds_are_one_day():
