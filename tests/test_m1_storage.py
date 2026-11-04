@@ -1,5 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from src.ingestion.trade2_geo_trade_v2 import (
     FUSO_BRASILIA,
     gravar_candles,
@@ -121,3 +123,8 @@ def test_candle_rejects_fractional_or_negative_counters():
     for field, value in (("tick_volume", 1.5), ("spread", -1), ("real_volume", float("inf"))):
         candidate = {**base, field: value}
         assert validar_candle(candidate) is False
+
+@pytest.mark.parametrize("value", ["2026-W45-3", "20261104", "04-11-2026"])
+def test_brasilia_date_parser_rejects_non_calendar_formats(value):
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        obter_intervalo_utc(value)
