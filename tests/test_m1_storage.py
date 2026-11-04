@@ -5,6 +5,7 @@ from src.ingestion.trade2_geo_trade_v2 import (
     gravar_candles,
     obter_intervalo_utc,
     preparar_banco,
+    validar_candle,
 )
 
 
@@ -53,3 +54,44 @@ def test_candle_persistence_is_idempotent_and_excludes_end_boundary(tmp_path):
         assert datetime.fromisoformat(local_timestamp).utcoffset() == timedelta(hours=-3)
     finally:
         database.close()
+
+
+
+def test_valid_candle_passes_quality_gate():
+    candle = {
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is True
+
+
+def test_invalid_ohlc_relationship_is_rejected():
+    candle = {
+        "open": 1.1, "high": 1.05, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is False
+
+
+def test_non_finite_price_is_rejected():
+    candle = {
+        "open": 1.1, "high": float("nan"), "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is False
+
+
+def test_negative_volume_or_spread_is_rejected():
+    candle = {
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": -1, "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is False
+
+
+def test_missing_market_field_is_rejected():
+    candle = {
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2,
+    }
+    assert validar_candle(candle) is False
