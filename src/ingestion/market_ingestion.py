@@ -96,10 +96,27 @@ def validate_rates(rates):
     missing = sorted(set(required) - set(rates.columns))
     if missing:
         raise ValueError(f"Missing required market columns: {', '.join(missing)}")
-    clean = rates.dropna(subset=required).copy()
-    valid = ((clean["high"] >= clean[["open", "close", "low"]].max(axis=1)) &
-             (clean["low"] <= clean[["open", "close", "high"]].min(axis=1)) &
-             (clean["high"] >= clean["low"]))
+    clean = rates.copy()
+    for column in required:
+        clean[column] = pd.to_numeric(clean[column], errors="coerce")
+    clean = clean.dropna(subset=required).copy()
+    if clean.empty:
+        return clean, len(rates)
+
+    prices = clean[["open", "high", "low", "close"]].to_numpy(dtype=float)
+    timestamps = clean["time"].to_numpy(dtype=float)
+    valid = np.isfinite(prices).all(axis=1)
+    valid &= np.isfinite(timestamps) & (timestamps == np.floor(timestamps))
+
+    for column in ("tick_volume", "spread", "real_volume"):
+        values = clean[column].to_numpy(dtype=float)
+        valid &= np.isfinite(values) & (values >= 0) & (values == np.floor(values))
+
+    valid &= (
+        (clean["high"] >= clean[["open", "close", "low"]].max(axis=1)).to_numpy()
+        & (clean["low"] <= clean[["open", "close", "high"]].min(axis=1)).to_numpy()
+        & (clean["high"] >= clean["low"]).to_numpy()
+    )
     clean = clean.loc[valid].copy()
     return clean, len(rates) - len(clean)
 
