@@ -54,6 +54,18 @@ def test_h1_validation_rejects_non_finite_prices_and_timestamps(column, value):
     assert rejected == 1
 
 
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("tick_volume", -1), ("spread", float("inf")), ("real_volume", 1.5)],
+)
+def test_h1_validation_rejects_invalid_volume_and_spread_fields(column, value):
+    rates = sample_rates()
+    rates.loc[0, column] = value
+    clean, rejected = validate_rates(rates)
+    assert len(clean) == 39
+    assert rejected == 1
+
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
