@@ -89,7 +89,13 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
 
 
 def validate_rates(rates):
-    required = ["time", "open", "high", "low", "close"]
+    required = [
+        "time", "open", "high", "low", "close",
+        "tick_volume", "spread", "real_volume",
+    ]
+    missing = sorted(set(required) - set(rates.columns))
+    if missing:
+        raise ValueError(f"Missing required market columns: {', '.join(missing)}")
     clean = rates.dropna(subset=required).copy()
     valid = ((clean["high"] >= clean[["open", "close", "low"]].max(axis=1)) &
              (clean["low"] <= clean[["open", "close", "high"]].min(axis=1)) &
