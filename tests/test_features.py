@@ -42,6 +42,18 @@ def test_h1_validation_fails_clearly_when_required_market_column_is_missing():
         validate_rates(rates)
 
 
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("high", float("inf")), ("close", float("nan")), ("time", float("inf"))],
+)
+def test_h1_validation_rejects_non_finite_prices_and_timestamps(column, value):
+    rates = sample_rates()
+    rates.loc[0, column] = value
+    clean, rejected = validate_rates(rates)
+    assert len(clean) == 39
+    assert rejected == 1
+
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
