@@ -12,27 +12,30 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white"/>
   <img alt="MetaTrader 5" src="https://img.shields.io/badge/Source-MetaTrader%205-2B579A"/>
-  <img alt="Data" src="https://img.shields.io/badge/Data-OHLCV%20%7C%20H1-00A6A6"/>
-  <img alt="Status" src="https://img.shields.io/badge/Status-Foundation%20%2B%20Roadmap-168B70"/>
+  <img alt="Data" src="https://img.shields.io/badge/Data-OHLCV%20%7C%20H1%20%7C%20M1-00A6A6"/>
+  <img alt="Storage" src="https://img.shields.io/badge/Storage-CSV%20%7C%20SQLite-168B70"/>
   <img alt="License" src="https://img.shields.io/badge/License-MIT-64748b"/>
 </p>
 
 ## Overview
 
-GEO_TRADE is an evolving engineering project focused on market-data ingestion, data quality, feature engineering and quantitative research. The current implementation collects H1 bars from an authenticated MetaTrader 5 desktop terminal, validates OHLC records, calculates descriptive features and exports reproducible CSV datasets.
+GEO_TRADE is an evolving engineering project focused on market-data ingestion, data quality, feature engineering and quantitative research. The repository currently contains two independent MetaTrader 5 ingestion paths:
 
-> Scope transparency: MT5 ingestion and CSV export are implemented. Database persistence, API services, dashboards, backtesting, machine learning and broker execution are roadmap items—not current capabilities.
+- **H1 feature pipeline:** collects hourly bars, validates OHLC records, calculates descriptive technical features and exports CSV datasets.
+- **M1 historical pipeline:** collects one-minute bars for a Brasília calendar day, converts the requested interval to UTC and persists candles and instrument metadata in SQLite.
+
+These pipelines serve different research needs and have separate entry points and output formats.
+
+> Scope transparency: MT5 ingestion, H1 feature calculation, CSV export and M1 SQLite persistence are implemented. API services, dashboards, backtesting, machine learning and broker execution remain roadmap items.
 
 ## Platform architecture
 
-The platform is organized into four logical layers:
-
 | Layer | Responsibility | Status |
 |---|---|---|
-| Market data | MT5 terminal and future external providers | MT5 implemented |
-| Ingestion & quality | Extraction, validation, deduplication, feature engineering | Implemented baseline |
-| Storage & consumption | CSV now; PostgreSQL/TimescaleDB or Supabase later | CSV implemented |
-| Quant research & operations | Backtesting, ML validation, API, dashboard, observability | Roadmap |
+| Market data | MetaTrader 5 terminal | Implemented |
+| Ingestion & quality | H1/M1 extraction, OHLC validation, deduplication and H1 feature engineering | Implemented baseline |
+| Storage & consumption | CSV exports and SQLite persistence | Implemented |
+| Quant research & operations | Backtesting, ML validation, API, dashboard and observability | Roadmap |
 
 See [the architecture notes](docs/architecture.md) and [the SVG diagram](docs/assets/geo-trade-architecture.svg).
 
@@ -41,14 +44,15 @@ See [the architecture notes](docs/architecture.md) and [the SVG diagram](docs/as
 ```text
 GEO_TRADE/
 ├── data/
-│   └── exports/                 # Generated files (ignored by Git)
+│   └── exports/                       # Generated files (ignored by Git)
 ├── docs/
 │   ├── architecture.md
 │   └── assets/
 │       └── geo-trade-architecture.svg
 ├── src/
 │   └── ingestion/
-│       └── market_ingestion.py
+│       ├── market_ingestion.py        # H1 -> features -> CSV
+│       └── trade2_geo_trade_v2.py     # M1 -> SQLite
 ├── tests/
 │   └── test_features.py
 ├── .env.example
@@ -57,7 +61,9 @@ GEO_TRADE/
 └── README.md
 ```
 
-## Current ingestion pipeline
+## H1 pipeline: features and CSV
+
+The H1 entry point is `src.ingestion.market_ingestion`.
 
 1. Initialize the local MetaTrader 5 terminal and verify account availability.
 2. Resolve requested symbols or enumerate symbols available in the terminal.
@@ -67,13 +73,55 @@ GEO_TRADE/
 6. Filter to the requested UTC calendar day.
 7. Deduplicate by symbol, timeframe and timestamp, then export a consolidated CSV.
 
+Example:
+
+```powershell
+python -m src.ingestion.market_ingestion
+python -m src.ingestion.market_ingestion --date 2026-08-21
+python -m src.ingestion.market_ingestion --date 2026-08-21 --symbols EURUSD GBPUSD USDJPY
+```
+
 The indicators are descriptive features, not trading signals or evidence of predictive performance. The last H1 bar may still be forming.
+
+## M1 pipeline: historical candles and SQLite
+
+The M1 entry point is `src/ingestion/trade2_geo_trade_v2.py`. It stores raw one-minute OHLCV-style candle fields and instrument metadata; it does not calculate technical indicators.
+
+Key behaviors:
+
+- Interprets `--date` as a calendar date in Brasília (UTC−03:00); by default, processes the previous Brasília day.
+- Converts the local day boundaries to UTC and applies a half-open interval: `[start, end)`.
+- Stores UTC and Brasília timestamps for each candle.
+- Uses a unique key on `(symbol, timeframe, timestamp_utc)` and `INSERT OR IGNORE` to make repeated imports idempotent.
+- Upserts instrument metadata without replacing the parent row.
+- Reports processed instruments, candles found/inserted, errors and database totals.
+- Can optionally open DB Browser for SQLite after the run.
+
+Example (PowerShell):
+
+```powershell
+python .\src\ingestion\trade2_geo_trade_v2.py
+python .\src\ingestion\trade2_geo_trade_v2.py --date 2026-08-21
+python .\src\ingestion\trade2_geo_trade_v2.py --symbols EURUSD GBPUSD
+python .\src\ingestion\trade2_geo_trade_v2.py --no-open-db
+```
+
+Optional arguments:
+
+- `--date YYYY-MM-DD`: Brasília calendar date to extract.
+- `--symbols`: one or more MT5 instrument symbols; without it, the script enumerates terminal symbols.
+- `--terminal-path`: path to `terminal64.exe`.
+- `--db-path`: SQLite database destination (default: `~/Downloads/geo_trade_completo.db`).
+- `--no-open-db`: skip the optional DB Browser launch.
+
+The M1 script requires the `MetaTrader5` and `colorama` Python packages. The terminal must be installed, running or launchable at the configured path, and authenticated with access to the requested market history.
 
 ## Requirements
 
 - Windows with MetaTrader 5 desktop terminal installed.
 - A valid account authenticated in the terminal.
-- Python 3.10+ and access to the requested symbol history.
+- Python 3.10+.
+- Dependencies listed in `requirements.txt`.
 
 ## Setup (PowerShell)
 
@@ -86,32 +134,13 @@ pip install -r requirements.txt
 
 If script activation is restricted, invoke the environment interpreter directly.
 
-## Run
-
-```powershell
-# Collect the current UTC date
-python -m src.ingestion.market_ingestion
-
-# Collect a specific UTC date
-python -m src.ingestion.market_ingestion --date 2026-08-21
-
-# Limit collection to selected instruments
-python -m src.ingestion.market_ingestion --date 2026-08-21 --symbols EURUSD GBPUSD USDJPY
-```
-
-Optional arguments:
-
-- `--terminal-path`: path to `terminal64.exe`.
-- `--output-dir`: destination for generated CSV files.
-- `--symbols`: one or more MT5 instrument symbols.
-
 ## Tests
 
 ```powershell
 python -m pytest
 ```
 
-Tests cover feature columns, OHLC validation and UTC date boundaries. The MT5 integration still requires a locally authenticated terminal and must be validated in that environment.
+The current automated tests cover H1 feature columns, OHLC validation and UTC date boundaries. The M1 extraction depends on a locally authenticated MT5 terminal and should be integration-tested in that environment.
 
 ## Engineering principles
 
@@ -119,6 +148,7 @@ Tests cover feature columns, OHLC validation and UTC date boundaries. The MT5 in
 - Warm-up history before rolling indicator calculation.
 - Point-in-time discipline and temporal validation for future ML work.
 - Data quality checks, deterministic identifiers and reproducible exports.
+- Idempotent persistence for repeated M1 imports.
 - Secrets and generated market data excluded from version control.
 - No claim of profitability without out-of-sample evidence and realistic costs.
 
@@ -126,10 +156,11 @@ Tests cover feature columns, OHLC validation and UTC date boundaries. The MT5 in
 
 - [x] Initial MT5 H1 ingestion and CSV export.
 - [x] OHLC validation and technical feature baseline.
+- [x] M1 historical ingestion and SQLite persistence.
 - [x] Repository documentation and architecture diagram.
-- [ ] Integration test against a live MT5 terminal.
+- [ ] Automated integration test against a live MT5 terminal.
 - [ ] Structured logging, run metadata and ingestion checkpoints.
-- [ ] PostgreSQL/TimescaleDB persistence and migrations.
+- [ ] Database migrations and retention strategy.
 - [ ] API and analytical dashboard.
 - [ ] Backtesting with fees, spread, slippage and walk-forward evaluation.
 - [ ] ML experiments with leakage controls, model registry and drift monitoring.
