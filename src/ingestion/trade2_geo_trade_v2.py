@@ -193,8 +193,7 @@ def gravar_metadados_ativo(cursor, info):
             trade_tick_value=excluded.trade_tick_value,
             volume_min=excluded.volume_min,
             volume_max=excluded.volume_max,
-            volume_step=excluded.volume_step,
-            created_at=excluded.created_at
+            volume_step=excluded.volume_step
     """, (
         info.name,
         getattr(info, "description", "") or "",
@@ -213,13 +212,43 @@ def gravar_metadados_ativo(cursor, info):
     ))
 
 
+def validar_candle(candle):
+    """Valida OHLC, finitude dos preços e volumes antes da persistência."""
+    import math
+
+    try:
+        abertura = float(candle["open"])
+        maxima = float(candle["high"])
+        minima = float(candle["low"])
+        fechamento = float(candle["close"])
+        volume = int(candle["tick_volume"])
+        spread = int(candle["spread"])
+        volume_real = int(candle["real_volume"])
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+
+    precos = (abertura, maxima, minima, fechamento)
+    if not all(math.isfinite(valor) for valor in precos):
+        return False
+    if minima <= 0 or maxima < minima:
+        return False
+    if maxima < max(abertura, fechamento) or minima > min(abertura, fechamento):
+        return False
+    return volume >= 0 and spread >= 0 and volume_real >= 0
+
+
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
     inseridos = 0
     timestamps = []
     maximas = []
     minimas = []
+    rejeitados = 0
 
     for candle in rates:
+        if not validar_candle(candle):
+            rejeitados += 1
+            continue
+
         instante_utc = datetime.fromtimestamp(
             int(candle["time"]), tz=timezone.utc
         )
@@ -263,6 +292,7 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
     return {
         "encontrados": len(timestamps),
         "inseridos": inseridos,
+        "rejeitados": rejeitados,
         "primeiro": min(timestamps) if timestamps else None,
         "ultimo": max(timestamps) if timestamps else None,
         "maxima": max(maximas) if maximas else None,
