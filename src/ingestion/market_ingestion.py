@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
@@ -33,6 +34,8 @@ def parse_args():
 
 
 def utc_bounds(day_text):
+    if not isinstance(day_text, str) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day_text):
+        raise ValueError("date must use YYYY-MM-DD")
     selected = date.fromisoformat(day_text)
     start = datetime.combine(selected, time.min, tzinfo=timezone.utc)
     return start, start + timedelta(days=1)
