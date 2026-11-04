@@ -530,6 +530,8 @@ def main():
 
                 print(CIANO + f"   ✓ Candles encontrados : {resultado['encontrados']:>6}")
                 print(CIANO + f"   ✓ Novos no banco      : {resultado['inseridos']:>6}")
+                if resultado["rejeitados"]:
+                    print(AMARELO + f"   ⚠ Candles rejeitados  : {resultado['rejeitados']:>6}")
                 print(BRANCO + f"   │ Horario UTC         : {primeiro} -> {ultimo}")
                 print(BRANCO + f"   │ Maxima              : {resultado['maxima']}")
                 print(BRANCO + f"   │ Minima              : {resultado['minima']}")
