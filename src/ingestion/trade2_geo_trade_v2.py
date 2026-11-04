@@ -22,7 +22,11 @@ import time
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
 
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+except ImportError:  # MT5 is only needed by the live terminal entry point.
+    mt5 = None
+
 from colorama import Fore, init
 
 
@@ -43,7 +47,7 @@ MT5_PATH_PADRAO = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 PASTA_BASE_PADRAO = Path.home() / "Downloads"
 DB_PATH_PADRAO = PASTA_BASE_PADRAO / "geo_trade_completo.db"
 
-TIMEFRAME = mt5.TIMEFRAME_M1
+TIMEFRAME = getattr(mt5, "TIMEFRAME_M1", None)
 TIMEFRAME_NOME = "M1"
 FUSO_BRASILIA = timezone(timedelta(hours=-3), name="America/Sao_Paulo")
 PAUSA_ATIVO = 0.015
@@ -402,6 +406,9 @@ def mostrar_validacao(conn, data_alvo):
 
 def main():
     args = parse_args()
+    if mt5 is None:
+        print(VERMELHO + "MetaTrader5 package is required for live M1 extraction.")
+        return 2
 
     try:
         data_alvo, inicio_utc, fim_utc = obter_intervalo_utc(args.data_alvo)
