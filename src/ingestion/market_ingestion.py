@@ -87,7 +87,7 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     df["volatility_pct"] = df["volatility_10"] * 100
     for col, value in {
         "hour": df["timestamp_brasilia"].dt.hour,
-        "day_of_week": df["timestamp_brasilia"].dt.dayofweek,
+        "day_of_week": df["timestamp_brasilia"].dt.day_of_week,
         "day_of_month": df["timestamp_brasilia"].dt.day,
         "month": df["timestamp_brasilia"].dt.month,
     }.items():
