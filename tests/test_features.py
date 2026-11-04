@@ -66,6 +66,12 @@ def test_h1_validation_rejects_invalid_volume_and_spread_fields(column, value):
     assert rejected == 1
 
 
+@pytest.mark.parametrize("value", ["2026-W45-3", "20261104", "04-11-2026"])
+def test_utc_bounds_reject_non_calendar_date_formats(value):
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        utc_bounds(value)
+
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
