@@ -100,7 +100,7 @@ def obter_intervalo_utc(data_informada=None):
     para UTC, formato esperado pelas funcoes de historico do MT5.
     """
     if data_informada:
-        if not isinstance(data_informada, str) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", data_informada):
+        if not isinstance(data_informada, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", data_informada):
             raise ValueError("date must use YYYY-MM-DD")
         data_local = date.fromisoformat(data_informada)
     else:
