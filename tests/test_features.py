@@ -48,6 +48,7 @@ def test_h1_validation_fails_clearly_when_required_market_column_is_missing():
 )
 def test_h1_validation_rejects_non_finite_prices_and_timestamps(column, value):
     rates = sample_rates()
+    rates[column] = rates[column].astype(float)
     rates.loc[0, column] = value
     clean, rejected = validate_rates(rates)
     assert len(clean) == 39
@@ -60,6 +61,7 @@ def test_h1_validation_rejects_non_finite_prices_and_timestamps(column, value):
 )
 def test_h1_validation_rejects_invalid_volume_and_spread_fields(column, value):
     rates = sample_rates()
+    rates[column] = rates[column].astype(float)
     rates.loc[0, column] = value
     clean, rejected = validate_rates(rates)
     assert len(clean) == 39
