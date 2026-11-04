@@ -59,6 +59,7 @@ def test_candle_persistence_is_idempotent_and_excludes_end_boundary(tmp_path):
 
 def test_valid_candle_passes_quality_gate():
     candle = {
+        "time": 1_700_000_000,
         "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
         "tick_volume": 10, "spread": 2, "real_volume": 0,
     }
@@ -67,6 +68,7 @@ def test_valid_candle_passes_quality_gate():
 
 def test_invalid_ohlc_relationship_is_rejected():
     candle = {
+        "time": 1_700_000_000,
         "open": 1.1, "high": 1.05, "low": 1.0, "close": 1.2,
         "tick_volume": 10, "spread": 2, "real_volume": 0,
     }
@@ -75,6 +77,7 @@ def test_invalid_ohlc_relationship_is_rejected():
 
 def test_non_finite_price_is_rejected():
     candle = {
+        "time": 1_700_000_000,
         "open": 1.1, "high": float("nan"), "low": 1.0, "close": 1.2,
         "tick_volume": 10, "spread": 2, "real_volume": 0,
     }
@@ -83,6 +86,7 @@ def test_non_finite_price_is_rejected():
 
 def test_negative_volume_or_spread_is_rejected():
     candle = {
+        "time": 1_700_000_000,
         "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
         "tick_volume": -1, "spread": 2, "real_volume": 0,
     }
@@ -91,7 +95,29 @@ def test_negative_volume_or_spread_is_rejected():
 
 def test_missing_market_field_is_rejected():
     candle = {
+        "time": 1_700_000_000,
         "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
         "tick_volume": 10, "spread": 2,
     }
     assert validar_candle(candle) is False
+
+def test_candle_requires_a_finite_integral_timestamp():
+    candle = {
+        "time": float("nan"),
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is False
+    candle.pop("time")
+    assert validar_candle(candle) is False
+
+
+def test_candle_rejects_fractional_or_negative_counters():
+    base = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    for field, value in (("tick_volume", 1.5), ("spread", -1), ("real_volume", float("inf"))):
+        candidate = {**base, field: value}
+        assert validar_candle(candidate) is False
