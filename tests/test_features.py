@@ -96,6 +96,16 @@ def test_h1_validation_collapses_identical_duplicate_bars():
     assert rejected == 1
     assert clean["time"].is_unique
 
+def test_h1_validation_rejects_conflicting_duplicate_bars():
+    rates = sample_rates()
+    conflicting = rates.iloc[[0]].copy()
+    conflicting.loc[:, "close"] = 1.006
+    rates = pd.concat([rates, conflicting], ignore_index=True)
+    clean, rejected = validate_rates(rates)
+    assert len(clean) == 39
+    assert rejected == 2
+    assert clean["time"].is_unique
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
