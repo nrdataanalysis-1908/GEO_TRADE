@@ -42,7 +42,8 @@ def utc_bounds(day_text):
 
 
 def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
-    df = rates.copy()
+    # Rolling indicators must be calculated in chronological order, not merely sorted afterward.
+    df = rates.copy().sort_values("time", kind="stable").reset_index(drop=True)
     df["timestamp_utc"] = pd.to_datetime(df["time"], unit="s", utc=True)
     df["timestamp_brasilia"] = df["timestamp_utc"].dt.tz_convert("America/Sao_Paulo")
     df["symbol"], df["timeframe"] = symbol, timeframe
