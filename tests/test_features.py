@@ -119,6 +119,12 @@ def test_h1_validation_rejects_boolean_market_values(column, value):
     assert len(clean) == 39
     assert rejected == 1
 
+def test_h1_validation_rejects_duplicate_market_columns():
+    rates = sample_rates()
+    rates = pd.concat([rates, rates[["close"]]], axis=1)
+    with pytest.raises(ValueError, match="Duplicate market columns: close"):
+        validate_rates(rates)
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
