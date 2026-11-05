@@ -104,6 +104,9 @@ def validate_rates(rates):
     missing = sorted(set(required) - set(rates.columns))
     if missing:
         raise ValueError(f"Missing required market columns: {', '.join(missing)}")
+    duplicates = sorted(set(rates.columns[rates.columns.duplicated()].tolist()))
+    if duplicates:
+        raise ValueError(f"Duplicate market columns: {', '.join(duplicates)}")
 
     clean = rates.copy().reset_index(drop=True)
     boolean_rows = clean[required].apply(
@@ -173,7 +176,11 @@ def main():
     if mt5 is None:
         print(RED + "MetaTrader5 package is required for live H1 ingestion.")
         return 2
-    start, end = utc_bounds(args.date)
+    try:
+        start, end = utc_bounds(args.date)
+    except ValueError as exc:
+        print(RED + f"Invalid date: {exc}")
+        return 2
     args.output_dir.mkdir(parents=True, exist_ok=True)
     output = args.output_dir / (
         f"GEO_TRADE_MARKET_H1_DAY_{args.date.replace('-', '')}_"
