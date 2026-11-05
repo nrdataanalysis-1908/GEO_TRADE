@@ -135,6 +135,13 @@ def test_main_returns_usage_error_for_invalid_calendar_date(monkeypatch, capsys)
     assert market.main() == 2
     assert "Invalid date" in capsys.readouterr().out
 
+def test_h1_validation_returns_bars_in_chronological_order():
+    rates = sample_rates().iloc[::-1].reset_index(drop=True)
+    clean, rejected = validate_rates(rates)
+    assert rejected == 0
+    assert clean["time"].is_monotonic_increasing
+
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
