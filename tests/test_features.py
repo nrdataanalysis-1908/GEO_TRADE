@@ -81,6 +81,13 @@ def test_feature_indicators_are_independent_of_input_row_order():
     actual = add_features(shuffled, "EURUSD")
     pd.testing.assert_frame_equal(actual, expected)
 
+def test_h1_validation_rejects_timestamps_outside_pandas_range():
+    rates = sample_rates()
+    rates.loc[0, "time"] = 10**20
+    clean, rejected = validate_rates(rates)
+    assert len(clean) == 39
+    assert rejected == 1
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
