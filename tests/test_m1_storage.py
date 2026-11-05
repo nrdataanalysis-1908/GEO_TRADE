@@ -124,6 +124,16 @@ def test_candle_rejects_fractional_or_negative_counters():
         candidate = {**base, field: value}
         assert validar_candle(candidate) is False
 
+@pytest.mark.parametrize("field", ["open", "high", "low", "close"])
+def test_candle_rejects_boolean_price_fields(field):
+    candle = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    candle[field] = True
+    assert validar_candle(candle) is False
+
 @pytest.mark.parametrize("value", ["2026-W45-3", "20261104", "04-11-2026"])
 def test_brasilia_date_parser_rejects_non_calendar_formats(value):
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
