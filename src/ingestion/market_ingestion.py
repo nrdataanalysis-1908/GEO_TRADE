@@ -104,7 +104,11 @@ def validate_rates(rates):
     missing = sorted(set(required) - set(rates.columns))
     if missing:
         raise ValueError(f"Missing required market columns: {', '.join(missing)}")
-    clean = rates.copy()
+
+    clean = rates.copy().reset_index(drop=True)
+    boolean_rows = clean[required].apply(
+        lambda column: column.map(lambda value: isinstance(value, (bool, np.bool_)))
+    ).any(axis=1)
     for column in required:
         clean[column] = pd.to_numeric(clean[column], errors="coerce")
     clean = clean.dropna(subset=required).copy()
@@ -113,8 +117,11 @@ def validate_rates(rates):
 
     prices = clean[["open", "high", "low", "close"]].to_numpy(dtype=float)
     timestamps = clean["time"].to_numpy(dtype=float)
-    valid = np.isfinite(prices).all(axis=1)
+    valid = ~boolean_rows.loc[clean.index].to_numpy()
+    valid &= np.isfinite(prices).all(axis=1)
     valid &= np.isfinite(timestamps) & (timestamps == np.floor(timestamps))
+    representable = pd.to_datetime(clean["time"], unit="s", utc=True, errors="coerce")
+    valid &= representable.notna().to_numpy()
 
     for column in ("tick_volume", "spread", "real_volume"):
         values = clean[column].to_numpy(dtype=float)
@@ -125,8 +132,22 @@ def validate_rates(rates):
         & (clean["low"] <= clean[["open", "close", "high"]].min(axis=1)).to_numpy()
         & (clean["high"] >= clean["low"]).to_numpy()
     )
-    clean = clean.loc[valid].copy()
-    return clean, len(rates) - len(clean)
+    clean = clean.loc[valid].copy().sort_values("time", kind="stable")
+
+    # Identical duplicate bars collapse to one row. Conflicting bars for the
+    # same timestamp are all rejected instead of selecting an arbitrary price.
+    duplicate_rows = clean.loc[clean.duplicated("time", keep=False)]
+    indexes_to_drop = []
+    market_columns = [column for column in required if column != "time"]
+    for _, group in duplicate_rows.groupby("time", sort=False):
+        if len(group[market_columns].drop_duplicates()) == 1:
+            indexes_to_drop.extend(group.index[1:])
+        else:
+            indexes_to_drop.extend(group.index)
+    if indexes_to_drop:
+        clean = clean.drop(index=indexes_to_drop)
+
+    return clean.reset_index(drop=True), len(rates) - len(clean)
 
 
 def collect_symbol(symbol, start, end):
