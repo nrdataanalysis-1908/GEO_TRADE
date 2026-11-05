@@ -106,6 +106,19 @@ def test_h1_validation_rejects_conflicting_duplicate_bars():
     assert rejected == 2
     assert clean["time"].is_unique
 
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("time", True), ("open", True), ("high", True), ("low", True),
+     ("close", True), ("tick_volume", True), ("spread", True), ("real_volume", True)],
+)
+def test_h1_validation_rejects_boolean_market_values(column, value):
+    rates = sample_rates()
+    rates[column] = rates[column].astype(object)
+    rates.loc[0, column] = value
+    clean, rejected = validate_rates(rates)
+    assert len(clean) == 39
+    assert rejected == 1
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
