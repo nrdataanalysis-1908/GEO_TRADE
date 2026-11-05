@@ -233,7 +233,8 @@ def validar_candle(candle):
             float(candle[key]) for key in ("tick_volume", "spread", "real_volume")
         )
         if any(isinstance(candle[key], bool) for key in (
-            "time", "tick_volume", "spread", "real_volume"
+            "time", "open", "high", "low", "close",
+            "tick_volume", "spread", "real_volume"
         )):
             return False
     except (KeyError, TypeError, ValueError, OverflowError):
