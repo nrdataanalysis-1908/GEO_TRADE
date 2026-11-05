@@ -74,6 +74,13 @@ def test_utc_bounds_reject_non_calendar_date_formats(value):
         utc_bounds(value)
 
 
+def test_feature_indicators_are_independent_of_input_row_order():
+    rates = sample_rates()
+    expected = add_features(rates, "EURUSD")
+    shuffled = rates.sample(frac=1, random_state=42)
+    actual = add_features(shuffled, "EURUSD")
+    pd.testing.assert_frame_equal(actual, expected)
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
