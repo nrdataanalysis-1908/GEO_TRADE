@@ -125,6 +125,16 @@ def test_h1_validation_rejects_duplicate_market_columns():
     with pytest.raises(ValueError, match="Duplicate market columns: close"):
         validate_rates(rates)
 
+def test_main_returns_usage_error_for_invalid_calendar_date(monkeypatch, capsys):
+    from argparse import Namespace
+    from unittest.mock import patch
+    import src.ingestion.market_ingestion as market
+
+    monkeypatch.setattr(market, "mt5", object())
+    monkeypatch.setattr(market, "parse_args", lambda: Namespace(date="2026-02-30"))
+    assert market.main() == 2
+    assert "Invalid date" in capsys.readouterr().out
+
 def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
