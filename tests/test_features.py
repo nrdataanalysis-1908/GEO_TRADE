@@ -83,6 +83,7 @@ def test_feature_indicators_are_independent_of_input_row_order():
 
 def test_h1_validation_rejects_timestamps_outside_pandas_range():
     rates = sample_rates()
+    rates["time"] = rates["time"].astype(object)
     rates.loc[0, "time"] = 10**20
     clean, rejected = validate_rates(rates)
     assert len(clean) == 39
