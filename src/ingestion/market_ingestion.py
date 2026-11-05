@@ -173,6 +173,7 @@ def collect_symbol(symbol, start, end):
 
 def main():
     args = parse_args()
+    print(CYAN + "GEO_TRADE | Desenvolvido por Nadison Roberto | NR TECH | © 2026")
     if mt5 is None:
         print(RED + "MetaTrader5 package is required for live H1 ingestion.")
         return 2
