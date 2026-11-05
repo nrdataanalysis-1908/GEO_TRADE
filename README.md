@@ -68,8 +68,8 @@ The H1 entry point is `src.ingestion.market_ingestion`.
 1. Initialize the local MetaTrader 5 terminal and verify account availability.
 2. Resolve requested symbols or enumerate symbols available in the terminal.
 3. Retrieve H1 bars with a preceding warm-up window.
-4. Validate OHLC consistency and reject invalid rows.
-5. Calculate candle anatomy, returns, moving averages, RSI, ATR, MACD, Bollinger bands and time features.
+4. Validate required columns, finite and representable timestamps, non-boolean market values and OHLC consistency; collapse identical duplicate bars and reject conflicting bars at the same timestamp.
+5. Sort bars chronologically before calculating candle anatomy, returns, moving averages, RSI, ATR, MACD, Bollinger bands and time features.
 6. Filter to the requested UTC calendar day.
 7. Deduplicate by symbol, timeframe and timestamp, then export a consolidated CSV.
 
@@ -92,7 +92,7 @@ Key behaviors:
 - Interprets `--date` as a calendar date in Brasília (UTC−03:00); by default, processes the previous Brasília day.
 - Converts the local day boundaries to UTC and applies a half-open interval: `[start, end)`.
 - Stores UTC and Brasília timestamps for each candle.
-- Validates each M1 candle before persistence: finite positive prices, coherent OHLC bounds and non-negative volume/spread fields; invalid records are skipped.
+- Validates each M1 candle before persistence: finite positive prices, coherent OHLC bounds and non-negative integral volume/spread fields; booleans and invalid records are rejected before SQLite writes.
 - Uses a unique key on `(symbol, timeframe, timestamp_utc)` and `INSERT OR IGNORE` to make repeated imports idempotent.
 - Upserts instrument metadata without replacing the parent row.
 - Reports processed instruments, candles found/inserted, errors and database totals; rejected market records can be inspected in the per-symbol output.
@@ -141,7 +141,7 @@ If script activation is restricted, invoke the environment interpreter directly.
 python -m pytest
 ```
 
-The automated tests cover H1 feature columns and OHLC validation, M1 OHLCV quality gates, SQLite idempotency and Brasília-to-UTC date boundaries. The live M1 extraction still depends on a locally authenticated MT5 terminal and should be integration-tested in that environment.
+The automated tests cover chronological feature calculation, H1 schema/timestamp/duplicate-bar quality gates, M1 OHLCV type and value checks, SQLite idempotency and Brasília-to-UTC date boundaries. The live M1 extraction still depends on a locally authenticated MT5 terminal and should be integration-tested in that environment.
 
 ## Engineering principles
 
