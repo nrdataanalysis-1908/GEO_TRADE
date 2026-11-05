@@ -441,6 +441,7 @@ def main():
     print(AZUL + "╔" + "═" * 78 + "╗")
     print(AZUL + "║" + " GEO_TRADE | EXTRACAO HISTORICA M1 ".center(78) + "║")
     print(AZUL + "╚" + "═" * 78 + "╝")
+    print(CIANO + "  Desenvolvido por Nadison Roberto | NR TECH | © 2026")
     print()
     print(AZUL + "▸ CONFIGURACAO")
     print(CIANO + f"  Data local          : {data_alvo:%d/%m/%Y}")
