@@ -663,7 +663,7 @@ def main():
     print(AZUL + "═" * 80)
     print(AZUL + " GEO_TRADE | PROCESSO FINALIZADO ")
     print(AZUL + "═" * 80)
-    return 0
+    return 1 if erros else 0
 
 
 if __name__ == "__main__":
