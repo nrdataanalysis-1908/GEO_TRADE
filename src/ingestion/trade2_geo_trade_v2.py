@@ -515,12 +515,12 @@ def main():
 
         versao = mt5.version()
         conta = mt5.account_info()
+        if conta is None:
+            raise RuntimeError(f"MT5 account is not authenticated: {mt5.last_error()}")
         print(CIANO + f"  Versao MT5 : {versao}")
-
-        if conta is not None:
-            print(CIANO + f"  Servidor   : {conta.server}")
-            print(CIANO + f"  Moeda      : {conta.currency}")
-            print(CIANO + f"  Saldo      : {conta.balance}")
+        print(CIANO + f"  Servidor   : {conta.server}")
+        print(CIANO + f"  Moeda      : {conta.currency}")
+        print(CIANO + f"  Saldo      : {conta.balance}")
 
         conn = preparar_banco(db_path)
         cursor = conn.cursor()
