@@ -53,12 +53,13 @@ The script defaults to a database under the user's Downloads directory. Use `--d
 1. Parse CLI arguments and resolve the Brasília calendar-day boundaries.
 2. Convert the local interval to UTC.
 3. Initialize the MT5 terminal using the configured executable path.
-4. Prepare the SQLite schema and indexes.
-5. Resolve the requested symbols or enumerate symbols available in MT5.
-6. Retrieve M1 history, filter records to the half-open UTC interval and persist candles.
-7. Upsert instrument metadata.
-8. Print execution totals and database validation information.
-9. Close database and MT5 resources in the cleanup path.
+4. Verify that the terminal exposes an authenticated account; abort before creating the database when it does not.
+5. Prepare the SQLite schema and indexes.
+6. Resolve the requested symbols or enumerate symbols available in MT5.
+7. Retrieve M1 history, filter records to the half-open UTC interval, validate candles and persist the accepted records.
+8. Upsert instrument metadata.
+9. Print execution totals and database validation information.
+10. Close database and MT5 resources in the cleanup path.
 
 ## Post-run checks
 
@@ -124,3 +125,14 @@ Not yet represented as implemented capabilities:
 - Automated integration tests against a controlled MT5 terminal.
 
 These items should be implemented and tested before treating the ingestion as a production service.
+
+## Additional quality gates
+
+- An explicit `--date` value must be a real calendar date in `YYYY-MM-DD` format. Only an omitted date selects the previous Brasília calendar day; empty or falsey explicit values are invalid.
+- Persistence requires a non-empty trimmed symbol and timezone-aware UTC interval boundaries with the end strictly later than the start.
+- Identical duplicate candles for the same timestamp are collapsed. If bars at the same timestamp disagree on OHLCV/spread values, the entire timestamp group is rejected rather than allowing SQLite's `INSERT OR IGNORE` to select an arbitrary record.
+- Invalid candles and duplicate rows contribute to the rejected-record count. The found/inserted totals represent unique accepted timestamps.
+- The process returns a non-zero exit code when any symbol-level ingestion error occurs. A run with no history for a symbol remains a no-data condition, not automatically a transport failure.
+- The H1 validator isolates numeric values that exceed float conversion limits, rejecting the affected rows instead of aborting the full batch. Feature engineering also validates its required columns and non-empty symbol/timeframe inputs before calculating indicators.
+
+The unit suite covers these deterministic behaviors. It does not replace the live Windows/MT5 integration check described above.

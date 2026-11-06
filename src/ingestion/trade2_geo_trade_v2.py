@@ -99,7 +99,7 @@ def obter_intervalo_utc(data_informada=None):
     Interpreta a data como dia civil de Brasilia e converte os limites
     para UTC, formato esperado pelas funcoes de historico do MT5.
     """
-    if data_informada:
+    if data_informada is not None:
         if not isinstance(data_informada, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", data_informada):
             raise ValueError("date must use YYYY-MM-DD")
         data_local = date.fromisoformat(data_informada)
@@ -261,26 +261,69 @@ def validar_candle(candle):
 
 
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
-    inseridos = 0
-    timestamps = []
-    maximas = []
-    minimas = []
+    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
+        raise ValueError("symbol must be a non-empty trimmed string")
+    if rates is None:
+        raise ValueError("rates must be an iterable of market candles")
+    bounds = (inicio_utc, fim_utc)
+    if any(
+        not isinstance(bound, datetime)
+        or bound.tzinfo is None
+        or bound.utcoffset() != timedelta(0)
+        for bound in bounds
+    ):
+        raise ValueError("inicio_utc and fim_utc must be UTC-aware datetimes")
+    if fim_utc <= inicio_utc:
+        raise ValueError("fim_utc must be later than inicio_utc")
+
     rejeitados = 0
+    valid_by_timestamp = {}
+    conflicting_timestamps = set()
 
     for candle in rates:
         if not validar_candle(candle):
             rejeitados += 1
             continue
 
-        instante_utc = datetime.fromtimestamp(
-            int(candle["time"]), tz=timezone.utc
-        )
-
+        timestamp = int(candle["time"])
+        instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         # O MT5 pode devolver limites inclusivos. O filtro assegura
         # que somente candles pertencentes ao dia solicitado sejam gravados.
         if not (inicio_utc <= instante_utc < fim_utc):
             continue
 
+        market_values = (
+            float(candle["open"]),
+            float(candle["high"]),
+            float(candle["low"]),
+            float(candle["close"]),
+            int(candle["tick_volume"]),
+            int(candle["spread"]),
+            int(candle["real_volume"]),
+        )
+        if timestamp in conflicting_timestamps:
+            rejeitados += 1
+            continue
+
+        existing = valid_by_timestamp.get(timestamp)
+        if existing is None:
+            valid_by_timestamp[timestamp] = (candle, market_values)
+        elif existing[1] == market_values:
+            # Identical duplicate bars are collapsed deterministically.
+            rejeitados += 1
+        else:
+            # Conflicting bars make the timestamp ambiguous; reject the
+            # complete group instead of allowing INSERT OR IGNORE to pick one.
+            rejeitados += 2
+            del valid_by_timestamp[timestamp]
+            conflicting_timestamps.add(timestamp)
+
+    inseridos = 0
+    timestamps = []
+    maximas = []
+    minimas = []
+    for timestamp, (candle, _) in sorted(valid_by_timestamp.items()):
+        instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         instante_brasilia = instante_utc.astimezone(FUSO_BRASILIA)
         timestamp_utc = instante_utc.isoformat()
         timestamp_brasilia = instante_brasilia.isoformat()
@@ -472,12 +515,12 @@ def main():
 
         versao = mt5.version()
         conta = mt5.account_info()
+        if conta is None:
+            raise RuntimeError(f"MT5 account is not authenticated: {mt5.last_error()}")
         print(CIANO + f"  Versao MT5 : {versao}")
-
-        if conta is not None:
-            print(CIANO + f"  Servidor   : {conta.server}")
-            print(CIANO + f"  Moeda      : {conta.currency}")
-            print(CIANO + f"  Saldo      : {conta.balance}")
+        print(CIANO + f"  Servidor   : {conta.server}")
+        print(CIANO + f"  Moeda      : {conta.currency}")
+        print(CIANO + f"  Saldo      : {conta.balance}")
 
         conn = preparar_banco(db_path)
         cursor = conn.cursor()
@@ -620,7 +663,7 @@ def main():
     print(AZUL + "═" * 80)
     print(AZUL + " GEO_TRADE | PROCESSO FINALIZADO ")
     print(AZUL + "═" * 80)
-    return 0
+    return 1 if erros else 0
 
 
 if __name__ == "__main__":

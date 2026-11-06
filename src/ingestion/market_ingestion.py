@@ -42,6 +42,22 @@ def utc_bounds(day_text):
 
 
 def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
+    if not isinstance(rates, pd.DataFrame):
+        raise TypeError("rates must be a pandas DataFrame")
+    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
+        raise ValueError("symbol must be a non-empty trimmed string")
+    if not isinstance(timeframe, str) or not timeframe.strip() or timeframe != timeframe.strip():
+        raise ValueError("timeframe must be a non-empty trimmed string")
+    required = ("time", "open", "high", "low", "close")
+    missing = [column for column in required if column not in rates.columns]
+    if missing:
+        raise ValueError(f"Missing required feature columns: {', '.join(missing)}")
+    duplicates = [column for column in required if list(rates.columns).count(column) > 1]
+    if duplicates:
+        raise ValueError(f"Duplicate feature columns: {', '.join(duplicates)}")
+    if rates.empty:
+        raise ValueError("rates must contain at least one market bar")
+
     # Rolling indicators must be calculated in chronological order, not merely sorted afterward.
     df = rates.copy().sort_values("time", kind="stable").reset_index(drop=True)
     df["timestamp_utc"] = pd.to_datetime(df["time"], unit="s", utc=True)
@@ -96,6 +112,13 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     return df.sort_values("timestamp_utc").reset_index(drop=True)
 
 
+def _safe_numeric_value(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return np.nan
+
+
 def validate_rates(rates):
     required = [
         "time", "open", "high", "low", "close",
@@ -113,7 +136,13 @@ def validate_rates(rates):
         lambda column: column.map(lambda value: isinstance(value, (bool, np.bool_)))
     ).any(axis=1)
     for column in required:
-        clean[column] = pd.to_numeric(clean[column], errors="coerce")
+        try:
+            clean[column] = pd.to_numeric(clean[column], errors="coerce")
+        except (OverflowError, TypeError, ValueError):
+            # One out-of-range Python integer can make pandas abort the entire
+            # column conversion. Fall back to row-wise coercion so that only
+            # malformed records are rejected instead of the complete batch.
+            clean[column] = clean[column].map(_safe_numeric_value)
     clean = clean.dropna(subset=required).copy()
     if clean.empty:
         return clean, len(rates)
