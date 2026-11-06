@@ -261,26 +261,54 @@ def validar_candle(candle):
 
 
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
-    inseridos = 0
-    timestamps = []
-    maximas = []
-    minimas = []
     rejeitados = 0
+    valid_by_timestamp = {}
+    conflicting_timestamps = set()
 
     for candle in rates:
         if not validar_candle(candle):
             rejeitados += 1
             continue
 
-        instante_utc = datetime.fromtimestamp(
-            int(candle["time"]), tz=timezone.utc
-        )
-
+        timestamp = int(candle["time"])
+        instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         # O MT5 pode devolver limites inclusivos. O filtro assegura
         # que somente candles pertencentes ao dia solicitado sejam gravados.
         if not (inicio_utc <= instante_utc < fim_utc):
             continue
 
+        market_values = (
+            float(candle["open"]),
+            float(candle["high"]),
+            float(candle["low"]),
+            float(candle["close"]),
+            int(candle["tick_volume"]),
+            int(candle["spread"]),
+            int(candle["real_volume"]),
+        )
+        if timestamp in conflicting_timestamps:
+            rejeitados += 1
+            continue
+
+        existing = valid_by_timestamp.get(timestamp)
+        if existing is None:
+            valid_by_timestamp[timestamp] = (candle, market_values)
+        elif existing[1] == market_values:
+            # Identical duplicate bars are collapsed deterministically.
+            rejeitados += 1
+        else:
+            # Conflicting bars make the timestamp ambiguous; reject the
+            # complete group instead of allowing INSERT OR IGNORE to pick one.
+            rejeitados += 2
+            del valid_by_timestamp[timestamp]
+            conflicting_timestamps.add(timestamp)
+
+    inseridos = 0
+    timestamps = []
+    maximas = []
+    minimas = []
+    for timestamp, (candle, _) in sorted(valid_by_timestamp.items()):
+        instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         instante_brasilia = instante_utc.astimezone(FUSO_BRASILIA)
         timestamp_utc = instante_utc.isoformat()
         timestamp_brasilia = instante_brasilia.isoformat()
