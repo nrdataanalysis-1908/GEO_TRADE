@@ -261,6 +261,21 @@ def validar_candle(candle):
 
 
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
+    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
+        raise ValueError("symbol must be a non-empty trimmed string")
+    if rates is None:
+        raise ValueError("rates must be an iterable of market candles")
+    bounds = (inicio_utc, fim_utc)
+    if any(
+        not isinstance(bound, datetime)
+        or bound.tzinfo is None
+        or bound.utcoffset() != timedelta(0)
+        for bound in bounds
+    ):
+        raise ValueError("inicio_utc and fim_utc must be UTC-aware datetimes")
+    if fim_utc <= inicio_utc:
+        raise ValueError("fim_utc must be later than inicio_utc")
+
     rejeitados = 0
     valid_by_timestamp = {}
     conflicting_timestamps = set()
