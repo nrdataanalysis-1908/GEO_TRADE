@@ -1,8 +1,11 @@
 import numpy as np
+from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.ingestion.market_ingestion import add_features, validate_rates, utc_bounds
+from src.ingestion.market_ingestion import (
+    add_features, validate_rates, utc_bounds, _write_csv_atomically,
+)
 
 
 def sample_rates():
@@ -182,4 +185,20 @@ def test_h1_main_returns_failure_when_any_symbol_fails_after_export(monkeypatch,
     assert market.main() == 1
     assert list(tmp_path.glob("GEO_TRADE_MARKET_H1_DAY_20260821_*.csv"))
     assert "errors=1" in capsys.readouterr().out
+
+
+def test_h1_atomic_csv_export_preserves_previous_file_on_write_failure(monkeypatch, tmp_path):
+    destination = tmp_path / "market.csv"
+    destination.write_text("previous-complete-export", encoding="utf-8")
+
+    def fail_after_partial_write(self, path, **kwargs):
+        Path(path).write_text("partial", encoding="utf-8")
+        raise OSError("simulated disk write failure")
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", fail_after_partial_write)
+    with pytest.raises(OSError, match="simulated disk write failure"):
+        _write_csv_atomically(sample_rates(), destination, ["time"])
+
+    assert destination.read_text(encoding="utf-8") == "previous-complete-export"
+    assert not list(tmp_path.glob(".market.csv.*.tmp"))
 
