@@ -153,6 +153,7 @@ def validate_rates(rates):
     timestamps = clean["time"].to_numpy(dtype=float)
     valid = ~boolean_rows.loc[clean.index].to_numpy()
     valid &= np.isfinite(prices).all(axis=1)
+    valid &= (prices > 0).all(axis=1)
     valid &= np.isfinite(timestamps) & (timestamps == np.floor(timestamps))
     representable = pd.to_datetime(clean["time"], unit="s", utc=True, errors="coerce")
     valid &= representable.notna().to_numpy()
