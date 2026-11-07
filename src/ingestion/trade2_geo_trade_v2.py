@@ -23,6 +23,8 @@ import time
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
+
 try:
     import MetaTrader5 as mt5
 except ImportError:  # MT5 is only needed by the live terminal entry point.
@@ -52,6 +54,7 @@ TIMEFRAME = getattr(mt5, "TIMEFRAME_M1", None)
 TIMEFRAME_NOME = "M1"
 FUSO_BRASILIA = timezone(timedelta(hours=-3), name="America/Sao_Paulo")
 PAUSA_ATIVO = 0.015
+SQLITE_INTEGER_MAX = (1 << 63) - 1
 
 
 # ============================================================
@@ -229,10 +232,11 @@ def validar_candle(candle):
         maxima = float(candle["high"])
         minima = float(candle["low"])
         fechamento = float(candle["close"])
-        contadores = tuple(
-            float(candle[key]) for key in ("tick_volume", "spread", "real_volume")
+        raw_contadores = tuple(
+            candle[key] for key in ("tick_volume", "spread", "real_volume")
         )
-        if any(isinstance(candle[key], bool) for key in (
+        contadores = tuple(float(value) for value in raw_contadores)
+        if any(isinstance(candle[key], (bool, np.bool_)) for key in (
             "time", "open", "high", "low", "close",
             "tick_volume", "spread", "real_volume"
         )):
@@ -252,6 +256,8 @@ def validar_candle(candle):
         return False
     if not all(math.isfinite(valor) and valor >= 0 and valor.is_integer()
                for valor in contadores):
+        return False
+    if any(int(valor) > SQLITE_INTEGER_MAX for valor in raw_contadores):
         return False
     if minima <= 0 or maxima < minima:
         return False

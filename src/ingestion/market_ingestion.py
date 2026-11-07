@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 import re
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -200,6 +202,25 @@ def collect_symbol(symbol, start, end):
     return (result if not result.empty else None), rejected, None
 
 
+
+def _write_csv_atomically(frame, destination, columns):
+    """Publish a complete CSV or leave the previous destination untouched."""
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    os.close(descriptor)
+    try:
+        frame[columns].to_csv(temporary_name, index=False, encoding="utf-8-sig")
+        with open(temporary_name, "rb") as stream:
+            os.fsync(stream.fileno())
+        os.replace(temporary_name, destination)
+    except Exception:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
 def main():
     args = parse_args()
     print(CYAN + "GEO_TRADE | Desenvolvido por Nadison Roberto | NR TECH | © 2026")
@@ -263,11 +284,11 @@ def main():
             "atr_14", "macd", "macd_signal", "macd_histogram", "bollinger_upper",
             "bollinger_middle", "bollinger_lower", "volatility_10", "volatility_pct",
             "hour", "day_of_week", "day_of_month", "month"]
-        market[columns].to_csv(output, index=False, encoding="utf-8-sig")
+        _write_csv_atomically(market, output, columns)
         print(CYAN + f"Exported {len(market)} candles to {output}")
         print(CYAN + f"Symbols with data={stats['with_data']} | without={stats['without_data']} "
                      f"| errors={stats['errors']} | rejected rows={stats['rejected']}")
-        return 0
+        return 1 if stats["errors"] else 0
     except Exception as exc:
         print(RED + f"FATAL: {exc}")
         return 1
