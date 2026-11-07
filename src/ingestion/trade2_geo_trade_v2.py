@@ -23,6 +23,8 @@ import time
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
+
 try:
     import MetaTrader5 as mt5
 except ImportError:  # MT5 is only needed by the live terminal entry point.
@@ -232,7 +234,7 @@ def validar_candle(candle):
         contadores = tuple(
             float(candle[key]) for key in ("tick_volume", "spread", "real_volume")
         )
-        if any(isinstance(candle[key], bool) for key in (
+        if any(isinstance(candle[key], (bool, np.bool_)) for key in (
             "time", "open", "high", "low", "close",
             "tick_volume", "spread", "real_volume"
         )):
