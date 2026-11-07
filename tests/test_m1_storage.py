@@ -27,6 +27,27 @@ def test_candle_rejects_numpy_boolean_market_values(field):
     assert validar_candle(candle) is False
 
 
+
+def test_candle_rejects_counters_outside_sqlite_integer_range():
+    base = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    for field in ("tick_volume", "spread", "real_volume"):
+        candidate = {**base, field: 2**63}
+        assert validar_candle(candidate) is False
+
+
+def test_candle_accepts_sqlite_signed_integer_upper_bound():
+    candle = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 2**63 - 1, "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is True
+
+
 def test_brasilia_calendar_day_is_converted_to_utc():
     selected, start, end = obter_intervalo_utc("2026-11-03")
 
