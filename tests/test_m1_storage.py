@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+import numpy as np
 
 from src.ingestion.trade2_geo_trade_v2 import (
     FUSO_BRASILIA,
@@ -9,6 +10,21 @@ from src.ingestion.trade2_geo_trade_v2 import (
     preparar_banco,
     validar_candle,
 )
+
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["time", "open", "high", "low", "close", "tick_volume", "spread", "real_volume"],
+)
+def test_candle_rejects_numpy_boolean_market_values(field):
+    candle = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": 10, "spread": 2, "real_volume": 0,
+    }
+    candle[field] = np.bool_(True)
+    assert validar_candle(candle) is False
 
 
 def test_brasilia_calendar_day_is_converted_to_utc():
