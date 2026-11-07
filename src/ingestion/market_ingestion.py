@@ -267,7 +267,7 @@ def main():
         print(CYAN + f"Exported {len(market)} candles to {output}")
         print(CYAN + f"Symbols with data={stats['with_data']} | without={stats['without_data']} "
                      f"| errors={stats['errors']} | rejected rows={stats['rejected']}")
-        return 0
+        return 1 if stats["errors"] else 0
     except Exception as exc:
         print(RED + f"FATAL: {exc}")
         return 1
