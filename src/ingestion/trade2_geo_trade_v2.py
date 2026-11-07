@@ -646,7 +646,9 @@ def main():
     except KeyboardInterrupt:
         print(AMARELO + "\n⚠ Execucao interrompida pelo usuario. Dados ja confirmados foram preservados.")
         if conn:
-            conn.commit()
+            # Each completed symbol is committed independently. Roll back only
+            # the current in-flight symbol instead of publishing a partial batch.
+            conn.rollback()
         return 130
 
     except Exception as erro:
