@@ -126,6 +126,7 @@ def obter_intervalo_utc(data_informada=None):
 # ============================================================
 
 def preparar_banco(db_path):
+    db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path), timeout=30)
