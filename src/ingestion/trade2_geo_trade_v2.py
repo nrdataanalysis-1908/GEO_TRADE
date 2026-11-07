@@ -325,10 +325,11 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             conflicting_timestamps.add(timestamp)
 
     inseridos = 0
+    conflitos_banco = 0
     timestamps = []
     maximas = []
     minimas = []
-    for timestamp, (candle, _) in sorted(valid_by_timestamp.items()):
+    for timestamp, (candle, market_values) in sorted(valid_by_timestamp.items()):
         instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         instante_brasilia = instante_utc.astimezone(FUSO_BRASILIA)
         timestamp_utc = instante_utc.isoformat()
@@ -356,6 +357,16 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
 
         if cursor.rowcount > 0:
             inseridos += 1
+        else:
+            persisted = cursor.execute(
+                """SELECT open, high, low, close, tick_volume, spread, real_volume
+                   FROM candles
+                   WHERE symbol = ? AND timeframe = ? AND timestamp_utc = ?""",
+                (symbol, TIMEFRAME_NOME, timestamp_utc),
+            ).fetchone()
+            if persisted is not None and tuple(persisted) != market_values:
+                conflitos_banco += 1
+                rejeitados += 1
 
         timestamps.append(instante_utc)
         maximas.append(float(candle["high"]))
@@ -365,6 +376,7 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
         "encontrados": len(timestamps),
         "inseridos": inseridos,
         "rejeitados": rejeitados,
+        "conflitos_banco": conflitos_banco,
         "primeiro": min(timestamps) if timestamps else None,
         "ultimo": max(timestamps) if timestamps else None,
         "maxima": max(maximas) if maximas else None,
