@@ -136,3 +136,12 @@ These items should be implemented and tested before treating the ingestion as a 
 - The H1 validator isolates numeric values that exceed float conversion limits, rejecting the affected rows instead of aborting the full batch. Feature engineering also validates its required columns and non-empty symbol/timeframe inputs before calculating indicators.
 
 The unit suite covers these deterministic behaviors. It does not replace the live Windows/MT5 integration check described above.
+
+
+## Transaction and data-conflict semantics
+
+Each symbol is committed independently. If the operator interrupts extraction while a symbol is still being processed, the in-flight transaction is rolled back; previously committed symbols remain intact. This avoids publishing a partial symbol batch after an interrupt.
+
+MT5 symbol lookup, symbol selection and history-query failures count as execution errors and produce a non-zero process exit status. An empty history response is treated separately as a symbol with no data.
+
+When a timestamp already exists in SQLite, an identical candle is treated as an idempotent replay. A different OHLCV payload for the same natural key is not allowed to overwrite the stored candle; it is counted and reported as a persisted-data conflict. Review such conflicts before any controlled backfill or database correction.
