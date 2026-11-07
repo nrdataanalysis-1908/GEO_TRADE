@@ -537,6 +537,7 @@ def main():
             for nome in args.symbols:
                 info = mt5.symbol_info(nome)
                 if info is None:
+                    erros += 1
                     print(AMARELO + f"⚠ Ativo nao encontrado no MT5: {nome}")
                 else:
                     ativos.append(info)
@@ -566,7 +567,7 @@ def main():
 
             try:
                 if not mt5.symbol_select(symbol, True):
-                    sem_dados += 1
+                    erros += 1
                     print(AMARELO + f"   ⚠ Nao foi possivel selecionar: {mt5.last_error()}")
                     continue
 
@@ -577,8 +578,8 @@ def main():
                 )
 
                 if rates is None:
-                    sem_dados += 1
-                    print(AMARELO + f"   ⚠ MT5 nao retornou dados: {mt5.last_error()}")
+                    erros += 1
+                    print(AMARELO + f"   ⚠ MT5 nao retornou historico: {mt5.last_error()}")
                     conn.rollback()
                     continue
 
