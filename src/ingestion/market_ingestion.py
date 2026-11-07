@@ -122,6 +122,8 @@ def _safe_numeric_value(value):
 
 
 def validate_rates(rates):
+    if not isinstance(rates, pd.DataFrame):
+        raise TypeError("rates must be a pandas DataFrame")
     required = [
         "time", "open", "high", "low", "close",
         "tick_volume", "spread", "real_volume",
