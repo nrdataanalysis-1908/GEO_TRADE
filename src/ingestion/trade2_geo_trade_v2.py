@@ -61,6 +61,24 @@ SQLITE_INTEGER_MAX = (1 << 63) - 1
 # ARGUMENTOS
 # ============================================================
 
+def validar_simbolos(symbols):
+    """Validate explicit MT5 symbol arguments and reject ambiguous duplicates."""
+    if symbols is None:
+        return None
+    if not isinstance(symbols, (list, tuple)) or not symbols:
+        raise ValueError("symbols must be a non-empty list when provided")
+    normalized = []
+    seen = set()
+    for symbol in symbols:
+        if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
+            raise ValueError("each symbol must be a non-empty trimmed string")
+        if symbol in seen:
+            raise ValueError(f"duplicate symbol argument: {symbol}")
+        seen.add(symbol)
+        normalized.append(symbol)
+    return normalized
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Extrai candles M1 do MetaTrader 5 e grava em SQLite."
@@ -487,6 +505,11 @@ def mostrar_validacao(conn, data_alvo):
 
 def main():
     args = parse_args()
+    try:
+        args.symbols = validar_simbolos(args.symbols)
+    except ValueError as exc:
+        print(VERMELHO + f"✗ Lista de ativos invalida: {exc}")
+        return 2
     if mt5 is None:
         print(VERMELHO + "MetaTrader5 package is required for live M1 extraction.")
         return 2
