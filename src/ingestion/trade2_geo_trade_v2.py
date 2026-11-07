@@ -61,6 +61,24 @@ SQLITE_INTEGER_MAX = (1 << 63) - 1
 # ARGUMENTOS
 # ============================================================
 
+def validar_simbolos(symbols):
+    """Validate explicit MT5 symbol arguments and reject ambiguous duplicates."""
+    if symbols is None:
+        return None
+    if not isinstance(symbols, (list, tuple)) or not symbols:
+        raise ValueError("symbols must be a non-empty list when provided")
+    normalized = []
+    seen = set()
+    for symbol in symbols:
+        if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
+            raise ValueError("each symbol must be a non-empty trimmed string")
+        if symbol in seen:
+            raise ValueError(f"duplicate symbol argument: {symbol}")
+        seen.add(symbol)
+        normalized.append(symbol)
+    return normalized
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Extrai candles M1 do MetaTrader 5 e grava em SQLite."
@@ -126,6 +144,7 @@ def obter_intervalo_utc(data_informada=None):
 # ============================================================
 
 def preparar_banco(db_path):
+    db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path), timeout=30)
@@ -325,10 +344,11 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             conflicting_timestamps.add(timestamp)
 
     inseridos = 0
+    conflitos_banco = 0
     timestamps = []
     maximas = []
     minimas = []
-    for timestamp, (candle, _) in sorted(valid_by_timestamp.items()):
+    for timestamp, (candle, market_values) in sorted(valid_by_timestamp.items()):
         instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         instante_brasilia = instante_utc.astimezone(FUSO_BRASILIA)
         timestamp_utc = instante_utc.isoformat()
@@ -356,6 +376,16 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
 
         if cursor.rowcount > 0:
             inseridos += 1
+        else:
+            persisted = cursor.execute(
+                """SELECT open, high, low, close, tick_volume, spread, real_volume
+                   FROM candles
+                   WHERE symbol = ? AND timeframe = ? AND timestamp_utc = ?""",
+                (symbol, TIMEFRAME_NOME, timestamp_utc),
+            ).fetchone()
+            if persisted is not None and tuple(persisted) != market_values:
+                conflitos_banco += 1
+                rejeitados += 1
 
         timestamps.append(instante_utc)
         maximas.append(float(candle["high"]))
@@ -365,6 +395,7 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
         "encontrados": len(timestamps),
         "inseridos": inseridos,
         "rejeitados": rejeitados,
+        "conflitos_banco": conflitos_banco,
         "primeiro": min(timestamps) if timestamps else None,
         "ultimo": max(timestamps) if timestamps else None,
         "maxima": max(maximas) if maximas else None,
@@ -474,6 +505,11 @@ def mostrar_validacao(conn, data_alvo):
 
 def main():
     args = parse_args()
+    try:
+        args.symbols = validar_simbolos(args.symbols)
+    except ValueError as exc:
+        print(VERMELHO + f"✗ Lista de ativos invalida: {exc}")
+        return 2
     if mt5 is None:
         print(VERMELHO + "MetaTrader5 package is required for live M1 extraction.")
         return 2
@@ -537,6 +573,7 @@ def main():
             for nome in args.symbols:
                 info = mt5.symbol_info(nome)
                 if info is None:
+                    erros += 1
                     print(AMARELO + f"⚠ Ativo nao encontrado no MT5: {nome}")
                 else:
                     ativos.append(info)
@@ -566,7 +603,7 @@ def main():
 
             try:
                 if not mt5.symbol_select(symbol, True):
-                    sem_dados += 1
+                    erros += 1
                     print(AMARELO + f"   ⚠ Nao foi possivel selecionar: {mt5.last_error()}")
                     continue
 
@@ -577,8 +614,8 @@ def main():
                 )
 
                 if rates is None:
-                    sem_dados += 1
-                    print(AMARELO + f"   ⚠ MT5 nao retornou dados: {mt5.last_error()}")
+                    erros += 1
+                    print(AMARELO + f"   ⚠ MT5 nao retornou historico: {mt5.last_error()}")
                     conn.rollback()
                     continue
 
@@ -608,6 +645,8 @@ def main():
                 print(CIANO + f"   ✓ Novos no banco      : {resultado['inseridos']:>6}")
                 if resultado["rejeitados"]:
                     print(AMARELO + f"   ⚠ Candles rejeitados  : {resultado['rejeitados']:>6}")
+                if resultado["conflitos_banco"]:
+                    print(AMARELO + f"   ⚠ Conflitos com banco : {resultado['conflitos_banco']:>6}")
                 print(BRANCO + f"   │ Horario UTC         : {primeiro} -> {ultimo}")
                 print(BRANCO + f"   │ Maxima              : {resultado['maxima']}")
                 print(BRANCO + f"   │ Minima              : {resultado['minima']}")
@@ -646,7 +685,9 @@ def main():
     except KeyboardInterrupt:
         print(AMARELO + "\n⚠ Execucao interrompida pelo usuario. Dados ja confirmados foram preservados.")
         if conn:
-            conn.commit()
+            # Each completed symbol is committed independently. Roll back only
+            # the current in-flight symbol instead of publishing a partial batch.
+            conn.rollback()
         return 130
 
     except Exception as erro:
