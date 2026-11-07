@@ -147,3 +147,39 @@ def test_utc_day_bounds_are_one_day():
     start, end = utc_bounds("2026-08-21")
     assert str(start) == "2026-08-21 00:00:00+00:00"
     assert (end - start).total_seconds() == 86400
+
+
+def test_h1_main_returns_failure_when_any_symbol_fails_after_export(monkeypatch, tmp_path, capsys):
+    from argparse import Namespace
+    from types import SimpleNamespace
+    import src.ingestion.market_ingestion as market
+
+    featured = add_features(sample_rates(), "GOOD")
+    fake_mt5 = SimpleNamespace(
+        initialize=lambda **kwargs: True,
+        account_info=lambda: SimpleNamespace(login=123, server="test-server"),
+        shutdown=lambda: None,
+    )
+    monkeypatch.setattr(market, "mt5", fake_mt5)
+    monkeypatch.setattr(
+        market,
+        "parse_args",
+        lambda: Namespace(
+            date="2026-08-21",
+            symbols=["GOOD", "BAD"],
+            terminal_path="unused",
+            output_dir=tmp_path,
+        ),
+    )
+
+    def collect(symbol, start, end):
+        if symbol == "GOOD":
+            return featured, 0, None
+        return None, 0, "simulated symbol failure"
+
+    monkeypatch.setattr(market, "collect_symbol", collect)
+
+    assert market.main() == 1
+    assert list(tmp_path.glob("GEO_TRADE_MARKET_H1_DAY_20260821_*.csv"))
+    assert "errors=1" in capsys.readouterr().out
+
