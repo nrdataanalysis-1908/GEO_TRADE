@@ -43,6 +43,31 @@ def utc_bounds(day_text):
     return start, start + timedelta(days=1)
 
 
+def validate_symbols(symbols):
+    """Validate an explicit H1 symbol list without changing its order."""
+    if symbols is None:
+        return None
+    if not isinstance(symbols, (list, tuple)) or not symbols:
+        raise ValueError("symbols must be a non-empty list when provided")
+    normalized = []
+    seen = set()
+    for symbol in symbols:
+        if (
+            not isinstance(symbol, str)
+            or not symbol.strip()
+            or symbol != symbol.strip()
+            or any(ord(character) < 32 or ord(character) == 127 for character in symbol)
+        ):
+            raise ValueError(
+                "each symbol must be a non-empty trimmed string without control characters"
+            )
+        if symbol in seen:
+            raise ValueError(f"duplicate symbol argument: {symbol}")
+        seen.add(symbol)
+        normalized.append(symbol)
+    return normalized
+
+
 def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if not isinstance(rates, pd.DataFrame):
         raise TypeError("rates must be a pandas DataFrame")
@@ -226,6 +251,11 @@ def _write_csv_atomically(frame, destination, columns):
 
 def main():
     args = parse_args()
+    try:
+        args.symbols = validate_symbols(getattr(args, "symbols", None))
+    except ValueError as exc:
+        print(RED + f"Invalid symbols: {exc}")
+        return 2
     print(CYAN + "GEO_TRADE | Desenvolvido por Nadison Roberto | NR TECH | © 2026")
     if mt5 is None:
         print(RED + "MetaTrader5 package is required for live H1 ingestion.")
