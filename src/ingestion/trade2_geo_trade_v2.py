@@ -130,7 +130,10 @@ def obter_intervalo_utc(data_informada=None):
     inicio_local = datetime.combine(
         data_local, datetime_time.min, tzinfo=FUSO_BRASILIA
     )
-    fim_local = inicio_local + timedelta(days=1)
+    try:
+        fim_local = inicio_local + timedelta(days=1)
+    except OverflowError as exc:
+        raise ValueError("date must allow an exclusive next-day boundary") from exc
 
     return (
         data_local,
