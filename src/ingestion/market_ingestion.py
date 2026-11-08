@@ -89,8 +89,42 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if rates.empty:
         raise ValueError("rates must contain at least one market bar")
 
+    df = rates.copy()
+    try:
+        for column in required:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+        boolean_rows = df[list(required)].apply(
+            lambda column: column.map(
+                lambda value: isinstance(value, (bool, np.bool_))
+            )
+        ).any(axis=1)
+        numeric_values = df[list(required)].to_numpy(dtype=float)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError("feature columns must contain finite numeric values") from exc
+    if boolean_rows.any() or not np.isfinite(numeric_values).all():
+        raise ValueError("feature columns must contain finite numeric values")
+
+    time_values = df["time"].to_numpy(dtype=float)
+    if not np.equal(time_values, np.floor(time_values)).all():
+        raise ValueError("time values must be integral Unix seconds")
+    timestamps = pd.to_datetime(df["time"], unit="s", utc=True, errors="coerce")
+    if timestamps.isna().any():
+        raise ValueError("time values must be representable as UTC timestamps")
+    if df["time"].duplicated().any():
+        raise ValueError("time values must be unique per symbol and timeframe")
+
+    prices = df[["open", "high", "low", "close"]].to_numpy(dtype=float)
+    opening, highest, lowest, closing = prices.T
+    if (
+        (prices <= 0).any()
+        or (highest < np.maximum(opening, closing)).any()
+        or (lowest > np.minimum(opening, closing)).any()
+        or (highest < lowest).any()
+    ):
+        raise ValueError("OHLC values must be positive and internally consistent")
+
     # Rolling indicators must be calculated in chronological order, not merely sorted afterward.
-    df = rates.copy().sort_values("time", kind="stable").reset_index(drop=True)
+    df = df.sort_values("time", kind="stable").reset_index(drop=True)
     df["timestamp_utc"] = pd.to_datetime(df["time"], unit="s", utc=True)
     df["timestamp_brasilia"] = df["timestamp_utc"].dt.tz_convert("America/Sao_Paulo")
     df["symbol"], df["timeframe"] = symbol, timeframe
