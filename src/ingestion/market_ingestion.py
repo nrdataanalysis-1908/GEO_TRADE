@@ -303,7 +303,11 @@ def main():
     except ValueError as exc:
         print(RED + f"Invalid date: {exc}")
         return 2
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(RED + f"Cannot create output directory {args.output_dir}: {exc}")
+        return 1
     output = args.output_dir / (
         f"GEO_TRADE_MARKET_H1_DAY_{args.date.replace('-', '')}_"
         f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
