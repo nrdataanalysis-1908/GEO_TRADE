@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from src.ingestion import market_ingestion
 from src.ingestion.market_ingestion import (
     add_features, validate_rates, utc_bounds, validate_symbols, _write_csv_atomically,
 )
@@ -62,6 +63,26 @@ def test_add_features_rejects_duplicate_timestamps():
     rates.loc[1, "time"] = rates.loc[0, "time"]
     with pytest.raises(ValueError):
         add_features(rates, "EURUSD")
+
+
+def test_h1_main_reports_output_directory_creation_failure(monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    class BlockedDirectory:
+        def mkdir(self, *args, **kwargs):
+            raise PermissionError("permission denied")
+
+    args = SimpleNamespace(
+        date="2026-11-03",
+        symbols=None,
+        output_dir=BlockedDirectory(),
+        terminal_path=None,
+    )
+    monkeypatch.setattr(market_ingestion, "parse_args", lambda: args)
+    monkeypatch.setattr(market_ingestion, "mt5", object())
+
+    assert market_ingestion.main() == 1
+    assert "output directory" in capsys.readouterr().out.lower()
 
 
 def test_feature_engineering_adds_expected_columns():
