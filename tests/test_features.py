@@ -41,6 +41,29 @@ def test_h1_symbol_validation_preserves_order_and_none_means_all_symbols():
     assert validate_symbols(None) is None
 
 
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("time", float("nan")),
+        ("time", 1.5),
+        ("open", float("inf")),
+        ("high", 0.5),
+    ],
+)
+def test_add_features_rejects_invalid_timestamp_and_ohlc_values(column, value):
+    rates = sample_rates()
+    rates.loc[0, column] = value
+    with pytest.raises(ValueError):
+        add_features(rates, "EURUSD")
+
+
+def test_add_features_rejects_duplicate_timestamps():
+    rates = sample_rates()
+    rates.loc[1, "time"] = rates.loc[0, "time"]
+    with pytest.raises(ValueError):
+        add_features(rates, "EURUSD")
+
+
 def test_feature_engineering_adds_expected_columns():
     result = add_features(sample_rates(), "EURUSD")
     expected = {"candle_id", "timestamp_utc", "timestamp_brasilia", "range",
