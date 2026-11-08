@@ -70,8 +70,15 @@ def validar_simbolos(symbols):
     normalized = []
     seen = set()
     for symbol in symbols:
-        if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
-            raise ValueError("each symbol must be a non-empty trimmed string")
+        if (
+            not isinstance(symbol, str)
+            or not symbol.strip()
+            or symbol != symbol.strip()
+            or any(ord(character) < 32 or ord(character) == 127 for character in symbol)
+        ):
+            raise ValueError(
+                "each symbol must be a non-empty trimmed string without control characters"
+            )
         if symbol in seen:
             raise ValueError(f"duplicate symbol argument: {symbol}")
         seen.add(symbol)
