@@ -53,6 +53,7 @@ def test_h1_symbol_validation_preserves_order_and_none_means_all_symbols():
 )
 def test_add_features_rejects_invalid_timestamp_and_ohlc_values(column, value):
     rates = sample_rates()
+    rates[column] = rates[column].astype(float)
     rates.loc[0, column] = value
     with pytest.raises(ValueError):
         add_features(rates, "EURUSD")
