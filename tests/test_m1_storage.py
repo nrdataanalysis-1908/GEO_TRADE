@@ -6,6 +6,7 @@ import numpy as np
 from src.ingestion.trade2_geo_trade_v2 import (
     FUSO_BRASILIA,
     gravar_candles,
+    gravar_metadados_ativo,
     obter_intervalo_utc,
     preparar_banco,
     validar_candle,
@@ -79,6 +80,38 @@ def test_candle_rejects_scientific_counter_overflow_without_raising():
         "tick_volume": "1e308", "spread": 2, "real_volume": 0,
     }
     assert validar_candle(candle) is False
+
+
+def test_asset_created_at_preserves_initial_registration_timestamp(tmp_path):
+    from types import SimpleNamespace
+
+    database = preparar_banco(tmp_path / "metadata.db")
+    try:
+        cursor = database.cursor()
+        gravar_metadados_ativo(
+            cursor, SimpleNamespace(name="EURUSD", description="initial")
+        )
+        database.commit()
+        original_timestamp = "2020-01-01T00:00:00+00:00"
+        database.execute(
+            "UPDATE ativos SET created_at = ? WHERE symbol = ?",
+            (original_timestamp, "EURUSD"),
+        )
+        database.commit()
+
+        gravar_metadados_ativo(
+            cursor, SimpleNamespace(name="EURUSD", description="refreshed")
+        )
+        database.commit()
+        row = database.execute(
+            "SELECT created_at, description FROM ativos WHERE symbol = ?",
+            ("EURUSD",),
+        ).fetchone()
+
+        assert row["created_at"] == original_timestamp
+        assert row["description"] == "refreshed"
+    finally:
+        database.close()
 
 
 def test_brasilia_calendar_day_is_converted_to_utc():
