@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import numpy as np
@@ -264,13 +265,13 @@ def validar_candle(candle):
         raw_contadores = tuple(
             candle[key] for key in ("tick_volume", "spread", "real_volume")
         )
-        contadores = tuple(float(value) for value in raw_contadores)
+        contadores = tuple(Decimal(str(value)) for value in raw_contadores)
         if any(isinstance(candle[key], (bool, np.bool_)) for key in (
             "time", "open", "high", "low", "close",
             "tick_volume", "spread", "real_volume"
         )):
             return False
-    except (KeyError, TypeError, ValueError, OverflowError):
+    except (KeyError, TypeError, ValueError, OverflowError, InvalidOperation):
         return False
 
     if not math.isfinite(timestamp) or not timestamp.is_integer():
@@ -283,10 +284,13 @@ def validar_candle(candle):
     precos = (abertura, maxima, minima, fechamento)
     if not all(math.isfinite(valor) for valor in precos):
         return False
-    if not all(math.isfinite(valor) and valor >= 0 and valor.is_integer()
-               for valor in contadores):
-        return False
-    if any(int(valor) > SQLITE_INTEGER_MAX for valor in contadores):
+    if any(
+        not valor.is_finite()
+        or valor < 0
+        or valor != valor.to_integral_value()
+        or valor > SQLITE_INTEGER_MAX
+        for valor in contadores
+    ):
         return False
     if minima <= 0 or maxima < minima:
         return False
@@ -320,7 +324,7 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             rejeitados += 1
             continue
 
-        timestamp = int(float(candle["time"]))
+        timestamp = int(Decimal(str(candle["time"])))
         instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         # O MT5 pode devolver limites inclusivos. O filtro assegura
         # que somente candles pertencentes ao dia solicitado sejam gravados.
@@ -332,9 +336,9 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             float(candle["high"]),
             float(candle["low"]),
             float(candle["close"]),
-            int(float(candle["tick_volume"])),
-            int(float(candle["spread"])),
-            int(float(candle["real_volume"])),
+            int(Decimal(str(candle["tick_volume"]))),
+            int(Decimal(str(candle["spread"]))),
+            int(Decimal(str(candle["real_volume"]))),
         )
         if timestamp in conflicting_timestamps:
             rejeitados += 1
@@ -379,9 +383,9 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             float(candle["high"]),
             float(candle["low"]),
             float(candle["close"]),
-            int(float(candle["tick_volume"])),
-            int(float(candle["spread"])),
-            int(float(candle["real_volume"])),
+            int(Decimal(str(candle["tick_volume"]))),
+            int(Decimal(str(candle["spread"]))),
+            int(Decimal(str(candle["real_volume"]))),
         ))
 
         if cursor.rowcount > 0:
