@@ -276,7 +276,7 @@ def validar_candle(candle):
     if not all(math.isfinite(valor) and valor >= 0 and valor.is_integer()
                for valor in contadores):
         return False
-    if any(int(valor) > SQLITE_INTEGER_MAX for valor in raw_contadores):
+    if any(int(valor) > SQLITE_INTEGER_MAX for valor in contadores):
         return False
     if minima <= 0 or maxima < minima:
         return False
@@ -310,7 +310,7 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             rejeitados += 1
             continue
 
-        timestamp = int(candle["time"])
+        timestamp = int(float(candle["time"]))
         instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         # O MT5 pode devolver limites inclusivos. O filtro assegura
         # que somente candles pertencentes ao dia solicitado sejam gravados.
@@ -322,9 +322,9 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             float(candle["high"]),
             float(candle["low"]),
             float(candle["close"]),
-            int(candle["tick_volume"]),
-            int(candle["spread"]),
-            int(candle["real_volume"]),
+            int(float(candle["tick_volume"])),
+            int(float(candle["spread"])),
+            int(float(candle["real_volume"])),
         )
         if timestamp in conflicting_timestamps:
             rejeitados += 1
@@ -369,9 +369,9 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             float(candle["high"]),
             float(candle["low"]),
             float(candle["close"]),
-            int(candle["tick_volume"]),
-            int(candle["spread"]),
-            int(candle["real_volume"]),
+            int(float(candle["tick_volume"])),
+            int(float(candle["spread"])),
+            int(float(candle["real_volume"])),
         ))
 
         if cursor.rowcount > 0:
