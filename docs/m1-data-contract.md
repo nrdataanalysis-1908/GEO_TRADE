@@ -26,9 +26,9 @@ One row per instrument symbol. The `symbol` column is unique.
 | `trade_tick_size` | Minimum tick size |
 | `trade_tick_value` | Tick value |
 | `volume_min`, `volume_max`, `volume_step` | Broker volume constraints |
-| `created_at` | UTC timestamp of the latest metadata upsert |
+| `created_at` | UTC timestamp of the initial metadata insertion |
 
-Metadata is inserted once and subsequently refreshed with an `ON CONFLICT(symbol) DO UPDATE` operation. Despite its name, `created_at` is refreshed on each upsert; consumers should interpret it as the last metadata synchronization timestamp.
+Metadata is inserted once and subsequently refreshed with an `ON CONFLICT(symbol) DO UPDATE` operation. The upsert deliberately does not update `created_at`; it remains the original registration timestamp. The current schema does not expose a separate last-synchronized timestamp.
 
 ### `candles`
 
