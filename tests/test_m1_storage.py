@@ -48,6 +48,39 @@ def test_candle_accepts_sqlite_signed_integer_upper_bound():
     assert validar_candle(candle) is True
 
 
+def test_integral_numeric_strings_are_validated_and_persisted_consistently(tmp_path):
+    database = preparar_banco(tmp_path / "numeric-strings.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        candle = {
+            "time": "1700000000.0",
+            "open": "1.1", "high": "1.3", "low": "1.0", "close": "1.2",
+            "tick_volume": "10.0", "spread": "2.0", "real_volume": "0.0",
+        }
+
+        assert validar_candle(candle) is True
+        result = gravar_candles(database.cursor(), "EURUSD", [candle], start, end)
+        database.commit()
+        persisted = database.execute(
+            "SELECT tick_volume, spread, real_volume FROM candles"
+        ).fetchone()
+
+        assert result["inseridos"] == 1
+        assert tuple(persisted) == (10, 2, 0)
+    finally:
+        database.close()
+
+
+def test_candle_rejects_scientific_counter_overflow_without_raising():
+    candle = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": "1e308", "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is False
+
+
 def test_brasilia_calendar_day_is_converted_to_utc():
     selected, start, end = obter_intervalo_utc("2026-11-03")
 
