@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from src.ingestion.market_ingestion import (
-    add_features, validate_rates, utc_bounds, _write_csv_atomically,
+    add_features, validate_rates, utc_bounds, validate_symbols, _write_csv_atomically,
 )
 
 
@@ -19,6 +19,26 @@ def sample_rates():
         "spread": np.full(40, 2),
         "real_volume": np.zeros(40),
     })
+
+
+@pytest.mark.parametrize(
+    "symbols",
+    [
+        [],
+        [""],
+        [" EURUSD"],
+        ["EURUSD", "EURUSD"],
+        ["EUR\\nUSD"],
+    ],
+)
+def test_h1_symbol_validation_rejects_ambiguous_arguments(symbols):
+    with pytest.raises(ValueError):
+        validate_symbols(symbols)
+
+
+def test_h1_symbol_validation_preserves_order_and_none_means_all_symbols():
+    assert validate_symbols(["EURUSD", "GBPUSD"]) == ["EURUSD", "GBPUSD"]
+    assert validate_symbols(None) is None
 
 
 def test_feature_engineering_adds_expected_columns():
