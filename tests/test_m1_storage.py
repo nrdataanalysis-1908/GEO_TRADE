@@ -108,8 +108,8 @@ def test_asset_created_at_preserves_initial_registration_timestamp(tmp_path):
             ("EURUSD",),
         ).fetchone()
 
-        assert row["created_at"] == original_timestamp
-        assert row["description"] == "refreshed"
+        assert row[0] == original_timestamp
+        assert row[1] == "refreshed"
     finally:
         database.close()
 
