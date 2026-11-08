@@ -40,7 +40,11 @@ def utc_bounds(day_text):
         raise ValueError("date must use YYYY-MM-DD")
     selected = date.fromisoformat(day_text)
     start = datetime.combine(selected, time.min, tzinfo=timezone.utc)
-    return start, start + timedelta(days=1)
+    try:
+        end = start + timedelta(days=1)
+    except OverflowError as exc:
+        raise ValueError("date must allow an exclusive next-day boundary") from exc
+    return start, end
 
 
 def validate_symbols(symbols):
