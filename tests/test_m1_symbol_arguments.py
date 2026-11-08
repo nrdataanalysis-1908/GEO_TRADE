@@ -13,6 +13,9 @@ def test_validar_simbolos_preserves_valid_order():
     [
         ["EURUSD", "EURUSD"],
         [" EURUSD"],
+        ["EUR\\nUSD"],
+        ["EUR\\tUSD"],
+        ["EUR\\x00USD"],
         [""],
         [None],
     ],
