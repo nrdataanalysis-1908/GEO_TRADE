@@ -29,7 +29,7 @@ def sample_rates():
         [""],
         [" EURUSD"],
         ["EURUSD", "EURUSD"],
-        ["EUR\\nUSD"],
+        ["EUR\nUSD"],
     ],
 )
 def test_h1_symbol_validation_rejects_ambiguous_arguments(symbols):
