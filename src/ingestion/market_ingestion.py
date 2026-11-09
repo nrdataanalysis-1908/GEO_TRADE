@@ -305,9 +305,23 @@ def validate_rates(rates):
 
 def collect_symbol(symbol, start, end):
     validate_symbols([symbol])
+    bounds = (start, end)
+    if any(
+        not isinstance(bound, datetime)
+        or bound.tzinfo is None
+        or bound.utcoffset() != timedelta(0)
+        for bound in bounds
+    ):
+        raise ValueError("start and end must be UTC-aware datetimes")
+    if end <= start:
+        raise ValueError("end must be later than start")
+    try:
+        warmup_start = start - timedelta(hours=WARMUP_HOURS)
+    except OverflowError as exc:
+        raise ValueError("start is too early for the configured indicator warmup") from exc
     if not mt5.symbol_select(symbol, True):
         return None, 0, f"symbol_select: {mt5.last_error()}"
-    rates = mt5.copy_rates_range(symbol, TIMEFRAME, start - timedelta(hours=WARMUP_HOURS), end)
+    rates = mt5.copy_rates_range(symbol, TIMEFRAME, warmup_start, end)
     if rates is None:
         return None, 0, f"copy_rates_range: {mt5.last_error()}"
     if len(rates) == 0:
