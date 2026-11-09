@@ -13,6 +13,7 @@ Execucao:
 """
 
 import argparse
+import math
 import os
 import re
 import shutil
@@ -221,6 +222,38 @@ def gravar_metadados_ativo(cursor, info):
         validar_simbolos([getattr(info, "name", None)])
     except ValueError as exc:
         raise ValueError("asset metadata requires a valid symbol") from exc
+    try:
+        digits = getattr(info, "digits", 0)
+        if digits is None:
+            digits = 0
+        if isinstance(digits, (bool, np.bool_)) or not isinstance(digits, (int, np.integer)) or digits < 0:
+            raise ValueError("digits must be a non-negative integer")
+        numeric_values = {}
+        for field in (
+            "point", "trade_tick_size", "trade_tick_value",
+            "volume_min", "volume_max", "volume_step",
+        ):
+            raw = getattr(info, field, 0)
+            if raw is None:
+                raw = 0
+            if isinstance(raw, (bool, np.bool_)):
+                raise ValueError(f"{field} must be numeric")
+            number = float(raw)
+            if not math.isfinite(number) or number < 0:
+                raise ValueError(f"{field} must be finite and non-negative")
+            numeric_values[field] = number
+        if numeric_values["volume_max"] > 0 and numeric_values["volume_min"] > numeric_values["volume_max"]:
+            raise ValueError("volume_min cannot exceed volume_max")
+        text_values = {}
+        for field in ("description", "path", "currency_base", "currency_profit", "currency_margin"):
+            raw = getattr(info, field, "")
+            if raw is None:
+                raw = ""
+            if not isinstance(raw, str) or _has_control_characters(raw):
+                raise ValueError(f"{field} must be text without control characters")
+            text_values[field] = raw
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("asset metadata contains invalid numeric or text fields") from exc
     agora = datetime.now(timezone.utc).isoformat()
 
     cursor.execute("""
@@ -245,18 +278,18 @@ def gravar_metadados_ativo(cursor, info):
             volume_step=excluded.volume_step
     """, (
         info.name,
-        getattr(info, "description", "") or "",
-        getattr(info, "path", "") or "",
-        getattr(info, "currency_base", "") or "",
-        getattr(info, "currency_profit", "") or "",
-        getattr(info, "currency_margin", "") or "",
-        getattr(info, "digits", 0) or 0,
-        getattr(info, "point", 0) or 0,
-        getattr(info, "trade_tick_size", 0) or 0,
-        getattr(info, "trade_tick_value", 0) or 0,
-        getattr(info, "volume_min", 0) or 0,
-        getattr(info, "volume_max", 0) or 0,
-        getattr(info, "volume_step", 0) or 0,
+        text_values["description"],
+        text_values["path"],
+        text_values["currency_base"],
+        text_values["currency_profit"],
+        text_values["currency_margin"],
+        int(digits),
+        numeric_values["point"],
+        numeric_values["trade_tick_size"],
+        numeric_values["trade_tick_value"],
+        numeric_values["volume_min"],
+        numeric_values["volume_max"],
+        numeric_values["volume_step"],
         agora,
     ))
 
