@@ -257,7 +257,13 @@ def validar_candle(candle):
     import math
 
     try:
-        timestamp = float(candle["time"])
+        timestamp_decimal = Decimal(str(candle["time"]))
+        if (
+            not timestamp_decimal.is_finite()
+            or timestamp_decimal != timestamp_decimal.to_integral_value()
+        ):
+            return False
+        timestamp = int(timestamp_decimal)
         abertura = float(candle["open"])
         maxima = float(candle["high"])
         minima = float(candle["low"])
@@ -274,10 +280,8 @@ def validar_candle(candle):
     except (KeyError, TypeError, ValueError, OverflowError, InvalidOperation):
         return False
 
-    if not math.isfinite(timestamp) or not timestamp.is_integer():
-        return False
     try:
-        datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+        datetime.fromtimestamp(timestamp, tz=timezone.utc)
     except (OverflowError, OSError, ValueError):
         return False
 
