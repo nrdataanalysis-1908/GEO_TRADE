@@ -347,7 +347,8 @@ def _write_csv_atomically(frame, destination, columns):
     os.close(descriptor)
     try:
         frame[columns].to_csv(temporary_name, index=False, encoding="utf-8-sig")
-        with open(temporary_name, "rb") as stream:
+        # Windows FlushFileBuffers requires a handle opened with write access.
+        with open(temporary_name, "rb+") as stream:
             os.fsync(stream.fileno())
         os.replace(temporary_name, destination)
     except Exception:
