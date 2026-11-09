@@ -204,15 +204,15 @@ def preparar_banco(db_path):
             UNIQUE(symbol, timeframe, timestamp_utc)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_candles_symbol
-            ON candles(symbol);
-
         CREATE INDEX IF NOT EXISTS idx_candles_timestamp
             ON candles(timestamp_utc);
 
         CREATE INDEX IF NOT EXISTS idx_candles_symbol_time
             ON candles(symbol, timestamp_utc);
     """)
+    # The composite index already supports symbol-only lookups through its
+    # leading column; keeping both indexes adds write and storage overhead.
+    conn.execute("DROP INDEX IF EXISTS idx_candles_symbol")
     conn.commit()
     return conn
 
