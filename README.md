@@ -83,6 +83,20 @@ python -m src.ingestion.market_ingestion --date 2026-08-21 --symbols EURUSD GBPU
 
 The indicators are descriptive features, not trading signals or evidence of predictive performance. The last H1 bar may still be forming.
 
+### H1 indicator conventions
+
+For reproducibility, the current feature implementation uses these conventions:
+
+- `sma_5` / `sma_10`: simple rolling means of close over 5 and 10 bars.
+- `ema_5` / `ema_10`: exponential moving averages with `adjust=False`.
+- `rsi_14`: 14-bar simple rolling means of positive and negative close changes. It is not Wilder-smoothed RSI; a flat window is assigned 50 and a window with gains but no losses is assigned 100.
+- `atr_14`: 14-bar simple rolling mean of True Range, not Wilder-smoothed ATR.
+- `macd`: EMA(12) minus EMA(26); `macd_signal` is the 9-bar EMA of MACD.
+- Bollinger bands: 20-bar simple mean plus/minus two rolling sample standard deviations.
+- `volatility_10`: 10-bar rolling sample standard deviation of close-to-close simple returns; `volatility_pct` scales it by 100.
+
+These definitions are part of the dataset contract. A future switch to Wilder smoothing or another convention should be versioned because it changes historical feature values.
+
 ## M1 pipeline: historical candles and SQLite
 
 The M1 entry point is `src/ingestion/trade2_geo_trade_v2.py`. It stores raw one-minute OHLCV-style candle fields and instrument metadata; it does not calculate technical indicators.
