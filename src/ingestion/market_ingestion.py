@@ -4,6 +4,7 @@ import argparse
 import os
 import tempfile
 import re
+import unicodedata
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -23,6 +24,10 @@ TIMEFRAME = getattr(mt5, "TIMEFRAME_H1", None)
 TIMEFRAME_NAME = "H1"
 WARMUP_HOURS = 60
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _has_control_characters(value):
+    return any(unicodedata.category(character) == "Cc" for character in value)
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 
 
@@ -61,7 +66,7 @@ def validate_symbols(symbols):
             not isinstance(symbol, str)
             or not symbol.strip()
             or symbol != symbol.strip()
-            or any(ord(character) < 32 or ord(character) == 127 for character in symbol)
+            or _has_control_characters(symbol)
         ):
             raise ValueError(
                 "each symbol must be a non-empty trimmed string without control characters"
@@ -94,10 +99,16 @@ def _parse_integral_timestamp(value):
 def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if not isinstance(rates, pd.DataFrame):
         raise TypeError("rates must be a pandas DataFrame")
-    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
-        raise ValueError("symbol must be a non-empty trimmed string")
-    if not isinstance(timeframe, str) or not timeframe.strip() or timeframe != timeframe.strip():
-        raise ValueError("timeframe must be a non-empty trimmed string")
+    if (
+        not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip()
+        or _has_control_characters(symbol)
+    ):
+        raise ValueError("symbol must be a non-empty trimmed string without control characters")
+    if (
+        not isinstance(timeframe, str) or not timeframe.strip() or timeframe != timeframe.strip()
+        or _has_control_characters(timeframe)
+    ):
+        raise ValueError("timeframe must be a non-empty trimmed string without control characters")
     required = ("time", "open", "high", "low", "close")
     missing = [column for column in required if column not in rates.columns]
     if missing:
@@ -293,6 +304,7 @@ def validate_rates(rates):
 
 
 def collect_symbol(symbol, start, end):
+    validate_symbols([symbol])
     if not mt5.symbol_select(symbol, True):
         return None, 0, f"symbol_select: {mt5.last_error()}"
     rates = mt5.copy_rates_range(symbol, TIMEFRAME, start - timedelta(hours=WARMUP_HOURS), end)

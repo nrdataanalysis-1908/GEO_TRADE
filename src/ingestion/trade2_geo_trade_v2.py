@@ -20,6 +20,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -58,6 +59,10 @@ PAUSA_ATIVO = 0.015
 SQLITE_INTEGER_MAX = (1 << 63) - 1
 
 
+def _has_control_characters(value):
+    return any(unicodedata.category(character) == "Cc" for character in value)
+
+
 # ============================================================
 # ARGUMENTOS
 # ============================================================
@@ -75,7 +80,7 @@ def validar_simbolos(symbols):
             not isinstance(symbol, str)
             or not symbol.strip()
             or symbol != symbol.strip()
-            or any(ord(character) < 32 or ord(character) == 127 for character in symbol)
+            or _has_control_characters(symbol)
         ):
             raise ValueError(
                 "each symbol must be a non-empty trimmed string without control characters"
@@ -212,6 +217,10 @@ def preparar_banco(db_path):
 
 
 def gravar_metadados_ativo(cursor, info):
+    try:
+        validar_simbolos([getattr(info, "name", None)])
+    except ValueError as exc:
+        raise ValueError("asset metadata requires a valid symbol") from exc
     agora = datetime.now(timezone.utc).isoformat()
 
     cursor.execute("""
@@ -304,8 +313,10 @@ def validar_candle(candle):
 
 
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
-    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
-        raise ValueError("symbol must be a non-empty trimmed string")
+    try:
+        validar_simbolos([symbol])
+    except ValueError as exc:
+        raise ValueError("symbol must be a valid trimmed name without control characters") from exc
     if rates is None:
         raise ValueError("rates must be an iterable of market candles")
     bounds = (inicio_utc, fim_utc)
