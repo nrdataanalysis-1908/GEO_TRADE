@@ -204,6 +204,26 @@ def _safe_numeric_value(value):
         return np.nan
 
 
+_SQLITE_INTEGER_MAX = (1 << 63) - 1
+
+
+def _parse_nonnegative_int64(value):
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if (
+        not number.is_finite()
+        or number < 0
+        or number != number.to_integral_value()
+        or number > _SQLITE_INTEGER_MAX
+    ):
+        return None
+    return int(number)
+
+
 def validate_rates(rates):
     if not isinstance(rates, pd.DataFrame):
         raise TypeError("rates must be a pandas DataFrame")
@@ -224,7 +244,7 @@ def validate_rates(rates):
     ).any(axis=1)
     parsed_times = [_parse_integral_timestamp(value) for value in clean["time"].tolist()]
     clean["time"] = pd.Series(parsed_times, index=clean.index, dtype="object")
-    for column in ("open", "high", "low", "close", "tick_volume", "spread", "real_volume"):
+    for column in ("open", "high", "low", "close"):
         try:
             clean[column] = pd.to_numeric(clean[column], errors="coerce")
         except (OverflowError, TypeError, ValueError):
@@ -232,10 +252,15 @@ def validate_rates(rates):
             # column conversion. Fall back to row-wise coercion so that only
             # malformed records are rejected instead of the complete batch.
             clean[column] = clean[column].map(_safe_numeric_value)
+    for column in ("tick_volume", "spread", "real_volume"):
+        parsed_counters = [_parse_nonnegative_int64(value) for value in clean[column].tolist()]
+        clean[column] = pd.Series(parsed_counters, index=clean.index, dtype="object")
     clean = clean.dropna(subset=required).copy()
     if clean.empty:
         return clean, len(rates)
     clean["time"] = clean["time"].astype("int64")
+    for column in ("tick_volume", "spread", "real_volume"):
+        clean[column] = clean[column].astype("int64")
 
     prices = clean[["open", "high", "low", "close"]].to_numpy(dtype=float)
     valid = ~boolean_rows.loc[clean.index].to_numpy()
@@ -243,10 +268,6 @@ def validate_rates(rates):
     valid &= (prices > 0).all(axis=1)
     representable = pd.to_datetime(clean["time"], unit="s", utc=True, errors="coerce")
     valid &= representable.notna().to_numpy()
-
-    for column in ("tick_volume", "spread", "real_volume"):
-        values = clean[column].to_numpy(dtype=float)
-        valid &= np.isfinite(values) & (values >= 0) & (values == np.floor(values))
 
     valid &= (
         (clean["high"] >= clean[["open", "close", "low"]].max(axis=1)).to_numpy()
