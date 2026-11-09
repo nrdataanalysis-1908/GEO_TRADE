@@ -227,8 +227,13 @@ def gravar_metadados_ativo(cursor, info):
         digits = getattr(info, "digits", 0)
         if digits is None:
             digits = 0
-        if isinstance(digits, (bool, np.bool_)) or not isinstance(digits, (int, np.integer)) or digits < 0:
-            raise ValueError("digits must be a non-negative integer")
+        if (
+            isinstance(digits, (bool, np.bool_))
+            or not isinstance(digits, (int, np.integer))
+            or digits < 0
+            or digits > SQLITE_INTEGER_MAX
+        ):
+            raise ValueError("digits must fit a non-negative SQLite signed 64-bit integer")
         numeric_values = {}
         for field in (
             "point", "trade_tick_size", "trade_tick_value",
