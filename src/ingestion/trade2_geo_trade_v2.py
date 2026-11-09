@@ -13,6 +13,7 @@ Execucao:
 """
 
 import argparse
+from collections.abc import Mapping
 import math
 import os
 import re
@@ -350,8 +351,12 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
         validar_simbolos([symbol])
     except ValueError as exc:
         raise ValueError("symbol must be a valid trimmed name without control characters") from exc
-    if rates is None:
-        raise ValueError("rates must be an iterable of market candles")
+    if rates is None or isinstance(rates, (str, bytes, bytearray, Mapping)):
+        raise ValueError("rates must be an iterable of candle records, not text or a mapping")
+    try:
+        rate_iterator = iter(rates)
+    except TypeError as exc:
+        raise ValueError("rates must be an iterable of candle records") from exc
     bounds = (inicio_utc, fim_utc)
     if any(
         not isinstance(bound, datetime)
@@ -367,7 +372,7 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
     valid_by_timestamp = {}
     conflicting_timestamps = set()
 
-    for candle in rates:
+    for candle in rate_iterator:
         if not validar_candle(candle):
             rejeitados += 1
             continue
