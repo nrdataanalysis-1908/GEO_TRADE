@@ -647,6 +647,8 @@ def main():
                 )
 
         total_ativos = len(ativos)
+        if total_ativos == 0:
+            raise RuntimeError("MT5 returned no available symbols")
         print(CIANO + f"✓ {total_ativos} ativos identificados")
         print()
         print(AZUL + "═" * 80)
