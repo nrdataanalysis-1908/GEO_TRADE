@@ -15,7 +15,7 @@ from src.ingestion.trade2_geo_trade_v2 import gravar_metadados_ativo, preparar_b
         ("trade_tick_value", float("inf")),
         ("volume_min", -1),
         ("volume_step", float("nan")),
-        ("description", "bad\\x00text"),
+        ("description", "bad\x00text"),
     ],
 )
 def test_asset_metadata_rejects_invalid_fields_before_persistence(tmp_path, field, value):
