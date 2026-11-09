@@ -5,6 +5,7 @@ import os
 import tempfile
 import re
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 try:
@@ -72,6 +73,24 @@ def validate_symbols(symbols):
     return normalized
 
 
+def _parse_integral_timestamp(value):
+    """Return exact Unix seconds only when the value is integral and pandas-representable."""
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not number.is_finite() or number != number.to_integral_value():
+        return None
+    try:
+        timestamp = int(number)
+        converted = pd.to_datetime(timestamp, unit="s", utc=True, errors="coerce")
+    except (OverflowError, TypeError, ValueError):
+        return None
+    return None if pd.isna(converted) else timestamp
+
+
 def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if not isinstance(rates, pd.DataFrame):
         raise TypeError("rates must be a pandas DataFrame")
@@ -89,24 +108,25 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if rates.empty:
         raise ValueError("rates must contain at least one market bar")
 
-    df = rates.copy()
+    df = rates.copy().reset_index(drop=True)
+    boolean_rows = df[list(required)].apply(
+        lambda column: column.map(
+            lambda value: isinstance(value, (bool, np.bool_))
+        )
+    ).any(axis=1)
+    parsed_times = [_parse_integral_timestamp(value) for value in df["time"].tolist()]
+    if any(value is None for value in parsed_times):
+        raise ValueError("time values must be exact integral Unix seconds within pandas range")
+    df["time"] = pd.Series(parsed_times, index=df.index, dtype="int64")
     try:
-        for column in required:
+        for column in required[1:]:
             df[column] = pd.to_numeric(df[column], errors="coerce")
-        boolean_rows = df[list(required)].apply(
-            lambda column: column.map(
-                lambda value: isinstance(value, (bool, np.bool_))
-            )
-        ).any(axis=1)
         numeric_values = df[list(required)].to_numpy(dtype=float)
     except (OverflowError, TypeError, ValueError) as exc:
         raise ValueError("feature columns must contain finite numeric values") from exc
     if boolean_rows.any() or not np.isfinite(numeric_values).all():
         raise ValueError("feature columns must contain finite numeric values")
 
-    time_values = df["time"].to_numpy(dtype=float)
-    if not np.equal(time_values, np.floor(time_values)).all():
-        raise ValueError("time values must be integral Unix seconds")
     timestamps = pd.to_datetime(df["time"], unit="s", utc=True, errors="coerce")
     if timestamps.isna().any():
         raise ValueError("time values must be representable as UTC timestamps")
