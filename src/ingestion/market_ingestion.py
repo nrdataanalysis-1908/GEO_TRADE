@@ -222,7 +222,9 @@ def validate_rates(rates):
     boolean_rows = clean[required].apply(
         lambda column: column.map(lambda value: isinstance(value, (bool, np.bool_)))
     ).any(axis=1)
-    for column in required:
+    parsed_times = [_parse_integral_timestamp(value) for value in clean["time"].tolist()]
+    clean["time"] = pd.Series(parsed_times, index=clean.index, dtype="object")
+    for column in ("open", "high", "low", "close", "tick_volume", "spread", "real_volume"):
         try:
             clean[column] = pd.to_numeric(clean[column], errors="coerce")
         except (OverflowError, TypeError, ValueError):
@@ -233,13 +235,12 @@ def validate_rates(rates):
     clean = clean.dropna(subset=required).copy()
     if clean.empty:
         return clean, len(rates)
+    clean["time"] = clean["time"].astype("int64")
 
     prices = clean[["open", "high", "low", "close"]].to_numpy(dtype=float)
-    timestamps = clean["time"].to_numpy(dtype=float)
     valid = ~boolean_rows.loc[clean.index].to_numpy()
     valid &= np.isfinite(prices).all(axis=1)
     valid &= (prices > 0).all(axis=1)
-    valid &= np.isfinite(timestamps) & (timestamps == np.floor(timestamps))
     representable = pd.to_datetime(clean["time"], unit="s", utc=True, errors="coerce")
     valid &= representable.notna().to_numpy()
 
