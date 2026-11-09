@@ -11,7 +11,7 @@ from src.ingestion.trade2_geo_trade_v2 import (
 from test_features import sample_rates
 
 
-@pytest.mark.parametrize("symbol", ["EUR\\u0085USD", "EUR\\u009fUSD"])
+@pytest.mark.parametrize("symbol", ["EUR\u0085USD", "EUR\u009fUSD"])
 def test_h1_rejects_unicode_control_characters(symbol):
     with pytest.raises(ValueError):
         validate_symbols([symbol])
@@ -19,7 +19,7 @@ def test_h1_rejects_unicode_control_characters(symbol):
         add_features(sample_rates(), symbol)
 
 
-@pytest.mark.parametrize("symbol", ["EUR\\u0085USD", "EUR\\u009fUSD"])
+@pytest.mark.parametrize("symbol", ["EUR\u0085USD", "EUR\u009fUSD"])
 def test_m1_rejects_unicode_control_characters(symbol):
     with pytest.raises(ValueError):
         validar_simbolos([symbol])
@@ -38,4 +38,4 @@ def test_h1_collect_symbol_rejects_invalid_name_before_mt5_call(monkeypatch):
     monkeypatch.setattr(h1, "mt5", UnexpectedTerminalCall())
     start = datetime(2026, 11, 3, tzinfo=timezone.utc)
     with pytest.raises(ValueError):
-        collect_symbol("EUR\\u0085USD", start, start + timedelta(hours=1))
+        collect_symbol("EUR\u0085USD", start, start + timedelta(hours=1))
