@@ -438,8 +438,11 @@ def main():
         return 1
     finally:
         if connected:
-            mt5.shutdown()
-            print(CYAN + "MT5 connection closed.")
+            try:
+                mt5.shutdown()
+                print(CYAN + "MT5 connection closed.")
+            except Exception as exc:
+                print(YELLOW + f"MT5 shutdown failed: {exc}")
 
 
 if __name__ == "__main__":

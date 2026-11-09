@@ -760,12 +760,18 @@ def main():
 
     finally:
         if conn is not None:
-            conn.close()
-            print(CIANO + "✓ Conexao SQLite encerrada")
+            try:
+                conn.close()
+                print(CIANO + "✓ Conexao SQLite encerrada")
+            except Exception as erro_fechamento:
+                print(AMARELO + f"⚠ Falha ao fechar SQLite: {erro_fechamento}")
 
         if mt5_inicializado:
-            mt5.shutdown()
-            print(CIANO + "✓ MetaTrader 5 encerrado")
+            try:
+                mt5.shutdown()
+                print(CIANO + "✓ MetaTrader 5 encerrado")
+            except Exception as erro_encerramento:
+                print(AMARELO + f"⚠ Falha ao encerrar MT5: {erro_encerramento}")
 
     if not args.no_open_db and db_path.exists():
         abrir_db_browser(db_path)
