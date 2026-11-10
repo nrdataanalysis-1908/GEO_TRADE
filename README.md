@@ -103,7 +103,7 @@ The M1 entry point is `src/ingestion/trade2_geo_trade_v2.py`. It stores raw one-
 
 Key behaviors:
 
-- Interprets `--date` as a calendar date in Brasília (UTC−03:00); by default, processes the previous Brasília day.
+- Interprets `--date` as a calendar date in the IANA `America/Sao_Paulo` timezone; historical daylight-saving transitions are applied, and the default remains the previous Brasília calendar day.
 - Converts the local day boundaries to UTC and applies a half-open interval: `[start, end)`.
 - Stores UTC and Brasília timestamps for each candle.
 - Validates each M1 candle before persistence: finite positive prices, coherent OHLC bounds and non-negative integral volume/spread fields; booleans and invalid records are rejected before SQLite writes.
@@ -129,7 +129,7 @@ Optional arguments:
 - `--db-path`: SQLite database destination (default: `~/Downloads/geo_trade_completo.db`).
 - `--no-open-db`: skip the optional DB Browser launch.
 
-The M1 script requires the `MetaTrader5` and `colorama` Python packages. The terminal must be installed, running or launchable at the configured path, and authenticated with access to the requested market history.
+The M1 script requires the `MetaTrader5`, `colorama` and `tzdata` Python packages. The IANA timezone database is required to convert historical Brasília dates correctly, including dates affected by daylight-saving transitions. The terminal must be installed, running or launchable at the configured path, and authenticated with access to the requested market history.
 
 ## Requirements
 
