@@ -38,7 +38,7 @@ One row per instrument, timeframe and UTC candle timestamp.
 |---|---|
 | `id` | Local integer primary key |
 | `timestamp_utc` | Candle opening timestamp in UTC, ISO 8601 |
-| `timestamp_brasilia` | Same instant represented at UTC−03:00 |
+| `timestamp_brasilia` | Same instant represented in the IANA `America/Sao_Paulo` timezone, including the historically applicable UTC offset |
 | `symbol` | MT5 instrument name |
 | `timeframe` | Timeframe identifier; currently `M1` |
 | `open`, `high`, `low`, `close` | OHLC prices |
@@ -50,8 +50,8 @@ The natural uniqueness constraint is `(symbol, timeframe, timestamp_utc)`. The t
 
 ## Time semantics
 
-- The requested `--date` is interpreted as a Brasília calendar date at UTC−03:00.
-- The extraction window is the local day converted to UTC.
+- The requested `--date` is interpreted as a calendar date in the IANA `America/Sao_Paulo` timezone.
+- The extraction window is formed from consecutive local midnights and then converted to UTC. Historical daylight-saving transitions can make a local calendar day 23 or 25 hours; the current no-DST regime yields 24-hour days.
 - The interval is half-open: `[start_utc, end_utc)`. A candle exactly at the next day's boundary is excluded.
 - Timestamps are persisted as ISO 8601 strings with explicit offsets.
 - Use `timestamp_utc` for cross-market joins and chronological comparisons. Use `timestamp_brasilia` for local operational inspection.
