@@ -26,6 +26,7 @@ import unicodedata
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -56,7 +57,7 @@ DB_PATH_PADRAO = PASTA_BASE_PADRAO / "geo_trade_completo.db"
 
 TIMEFRAME = getattr(mt5, "TIMEFRAME_M1", None)
 TIMEFRAME_NOME = "M1"
-FUSO_BRASILIA = timezone(timedelta(hours=-3), name="America/Sao_Paulo")
+FUSO_BRASILIA = ZoneInfo("America/Sao_Paulo")
 PAUSA_ATIVO = 0.015
 SQLITE_INTEGER_MAX = (1 << 63) - 1
 
