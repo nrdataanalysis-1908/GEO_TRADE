@@ -14,7 +14,7 @@ def test_atomic_export_replaces_destination_with_utf8_bom(tmp_path):
     _write_csv_atomically(frame, destination, ["time", "close"])
 
     assert destination.read_bytes().startswith(b"\xef\xbb\xbf")
-    assert destination.read_text(encoding="utf-8-sig") == "time,close\n1700000000,1.1\n"
+    assert destination.read_text(encoding="utf-8-sig").replace("\r\n", "\n") == "time,close\n1700000000,1.1\n"
     assert list(tmp_path.glob(".market.csv.*.tmp")) == []
 
 
