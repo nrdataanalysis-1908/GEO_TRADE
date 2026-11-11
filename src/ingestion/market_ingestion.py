@@ -22,7 +22,8 @@ init(autoreset=True)
 BLUE, CYAN, YELLOW, RED = Fore.LIGHTBLUE_EX, Fore.LIGHTCYAN_EX, Fore.LIGHTYELLOW_EX, Fore.LIGHTRED_EX
 TIMEFRAME = getattr(mt5, "TIMEFRAME_H1", None)
 TIMEFRAME_NAME = "H1"
-WARMUP_HOURS = 60
+# Fourteen calendar days retain enough H1 history across FX weekend closures for EMA(26) warm-up.
+WARMUP_HOURS = 14 * 24
 ROOT = Path(__file__).resolve().parents[2]
 
 
