@@ -206,6 +206,11 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
         "month": df["timestamp_brasilia"].dt.month,
     }.items():
         df[col] = value
+
+    numeric_features = df.select_dtypes(include=[np.number])
+    if np.isinf(numeric_features.to_numpy(dtype=float)).any():
+        raise ValueError("feature calculations produced non-finite numeric values")
+
     return df.sort_values("timestamp_utc").reset_index(drop=True)
 
 
