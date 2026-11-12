@@ -272,3 +272,15 @@ def test_h1_atomic_csv_export_preserves_previous_file_on_write_failure(monkeypat
     assert destination.read_text(encoding="utf-8") == "previous-complete-export"
     assert not list(tmp_path.glob(".market.csv.*.tmp"))
 
+def test_feature_engineering_rejects_overflowed_derived_metrics():
+    rates = sample_rates().iloc[:2].copy()
+    rates.loc[0, ["open", "high", "low", "close"]] = [
+        1e-308, 2e-308, 5e-309, 1.5e-308,
+    ]
+    rates.loc[1, ["open", "high", "low", "close"]] = [
+        1e308, 1.5e308, 0.9e308, 1.2e308,
+    ]
+
+    with pytest.raises(ValueError, match="non-finite"):
+        add_features(rates, "EURUSD")
+
