@@ -68,7 +68,7 @@ The H1 entry point is `src.ingestion.market_ingestion`.
 1. Initialize the local MetaTrader 5 terminal and verify account availability.
 2. Resolve requested symbols or enumerate symbols available in the terminal.
 3. Retrieve H1 bars with a 14-calendar-day warm-up window so recursive indicators retain context across weekend closures; the final export is filtered back to the requested UTC day.
-4. Validate required columns, finite and representable timestamps, non-boolean market values and OHLC consistency; collapse identical duplicate bars and reject conflicting bars at the same timestamp.
+4. Validate required columns, finite and representable timestamps, real non-boolean market values and OHLC consistency; collapse identical duplicate bars and reject conflicting bars at the same timestamp.
 5. Sort bars chronologically before calculating candle anatomy, returns, moving averages, RSI, ATR, MACD, Bollinger bands and time features.
 6. Filter to the requested UTC calendar day.
 7. Deduplicate by symbol, timeframe and timestamp, then export a consolidated CSV.
