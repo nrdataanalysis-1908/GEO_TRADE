@@ -307,3 +307,29 @@ def test_candle_persistence_rejects_text_and_mapping_containers(rates):
 
     with pytest.raises(ValueError, match="iterable of candle records"):
         gravar_candles(None, "EURUSD", rates, start, end)
+
+
+def test_candle_persistence_rejects_conflicting_duplicate_timestamp_group(tmp_path):
+    database = preparar_banco(tmp_path / "batch-conflict.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        timestamp = int((start + timedelta(minutes=1)).timestamp())
+        first = {
+            "time": timestamp,
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+        conflicting = {**first, "close": 1.25, "high": 1.3}
+
+        result = gravar_candles(
+            database.cursor(), "EURUSD", [first, conflicting], start, end
+        )
+        database.commit()
+
+        assert result["encontrados"] == 0
+        assert result["inseridos"] == 0
+        assert result["rejeitados"] == 2
+        assert database.execute("SELECT COUNT(*) FROM candles").fetchone()[0] == 0
+    finally:
+        database.close()
