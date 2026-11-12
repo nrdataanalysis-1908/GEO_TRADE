@@ -275,3 +275,26 @@ def test_candle_rejects_boolean_timestamp_and_counters(field):
 def test_brasilia_date_parser_rejects_non_calendar_formats(value):
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
         obter_intervalo_utc(value)
+
+
+def test_candle_persistence_accepts_one_shot_generator(tmp_path):
+    database = preparar_banco(tmp_path / "generator.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        candle = {
+            "time": int((start + timedelta(minutes=1)).timestamp()),
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+
+        result = gravar_candles(
+            database.cursor(), "EURUSD", (item for item in [candle]), start, end
+        )
+        database.commit()
+
+        assert result["encontrados"] == 1
+        assert result["inseridos"] == 1
+        assert database.execute("SELECT COUNT(*) FROM candles").fetchone()[0] == 1
+    finally:
+        database.close()
