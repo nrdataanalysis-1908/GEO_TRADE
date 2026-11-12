@@ -336,3 +336,20 @@ def test_add_features_does_not_mutate_input_dataframe():
     pd.testing.assert_frame_equal(rates, original)
     assert "timestamp_utc" in result.columns
     assert "timestamp_utc" not in rates.columns
+
+
+def test_feature_warmup_preserves_only_documented_rolling_null_windows():
+    result = add_features(sample_rates(), "EURUSD")
+
+    assert result["sma_5"].iloc[:4].isna().all()
+    assert result["sma_5"].iloc[4:].notna().all()
+    assert result["sma_10"].iloc[:9].isna().all()
+    assert result["sma_10"].iloc[9:].notna().all()
+    assert result["rsi_14"].iloc[:13].isna().all()
+    assert result["rsi_14"].iloc[13:].notna().all()
+    assert result["atr_14"].iloc[:13].isna().all()
+    assert result["atr_14"].iloc[13:].notna().all()
+    assert result["bollinger_middle"].iloc[:19].isna().all()
+    assert result["bollinger_middle"].iloc[19:].notna().all()
+    numeric = result.select_dtypes(include=[np.number]).to_numpy(dtype=float)
+    assert not np.isinf(numeric).any()
