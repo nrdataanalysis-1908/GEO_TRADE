@@ -298,3 +298,12 @@ def test_candle_persistence_accepts_one_shot_generator(tmp_path):
         assert database.execute("SELECT COUNT(*) FROM candles").fetchone()[0] == 1
     finally:
         database.close()
+
+
+@pytest.mark.parametrize("rates", ["not-candle-records", b"not-candle-records", {"time": 1}])
+def test_candle_persistence_rejects_text_and_mapping_containers(rates):
+    start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    with pytest.raises(ValueError, match="iterable of candle records"):
+        gravar_candles(None, "EURUSD", rates, start, end)
