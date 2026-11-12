@@ -325,3 +325,14 @@ def test_h1_validation_drops_unrepresentable_integer_price_without_losing_valid_
     assert len(clean) == len(rates) - 1
     assert rejected == 1
     assert clean["time"].is_monotonic_increasing
+
+
+def test_add_features_does_not_mutate_input_dataframe():
+    rates = sample_rates()
+    original = rates.copy(deep=True)
+
+    result = add_features(rates, "EURUSD")
+
+    pd.testing.assert_frame_equal(rates, original)
+    assert "timestamp_utc" in result.columns
+    assert "timestamp_utc" not in rates.columns
