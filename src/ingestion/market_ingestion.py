@@ -130,6 +130,12 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if any(value is None for value in parsed_times):
         raise ValueError("time values must be exact integral Unix seconds within pandas range")
     df["time"] = pd.Series(parsed_times, index=df.index, dtype="int64")
+    if any(
+        isinstance(value, (complex, np.complexfloating))
+        for column in required[1:]
+        for value in df[column].tolist()
+    ):
+        raise ValueError("feature columns must contain real finite numeric values")
     try:
         for column in required[1:]:
             df[column] = pd.to_numeric(df[column], errors="coerce")
@@ -262,6 +268,11 @@ def validate_rates(rates):
     parsed_times = [_parse_integral_timestamp(value) for value in clean["time"].tolist()]
     clean["time"] = pd.Series(parsed_times, index=clean.index, dtype="object")
     for column in ("open", "high", "low", "close"):
+        complex_values = clean[column].map(
+            lambda value: isinstance(value, (complex, np.complexfloating))
+        )
+        if complex_values.any():
+            clean.loc[complex_values, column] = np.nan
         try:
             clean[column] = pd.to_numeric(clean[column], errors="coerce")
         except (OverflowError, TypeError, ValueError):
