@@ -363,3 +363,30 @@ def test_candle_persistence_reports_existing_database_conflict_without_overwrite
         assert stored_close == pytest.approx(1.2)
     finally:
         database.close()
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (datetime(2023, 11, 14), datetime(2023, 11, 15, tzinfo=timezone.utc)),
+        (
+            datetime(2023, 11, 15, tzinfo=timezone.utc),
+            datetime(2023, 11, 14, tzinfo=timezone.utc),
+        ),
+    ],
+)
+def test_candle_persistence_rejects_invalid_utc_bounds_before_consuming_rates(start, end):
+    consumed = []
+
+    def rates():
+        consumed.append(True)
+        yield {
+            "time": 1_700_000_000,
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+
+    with pytest.raises(ValueError, match="UTC-aware|later than"):
+        gravar_candles(None, "EURUSD", rates(), start, end)
+
+    assert consumed == []
