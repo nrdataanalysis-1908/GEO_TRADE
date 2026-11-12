@@ -304,3 +304,12 @@ def test_h1_validation_rejects_complex_price_rows_without_real_part_coercion():
     assert rejected == 1
     assert np.isrealobj(clean["close"].to_numpy())
 
+
+@pytest.mark.parametrize("column", ["time", "open", "high", "low", "close"])
+def test_add_features_rejects_boolean_market_inputs(column):
+    rates = sample_rates()
+    rates[column] = rates[column].astype(object)
+    rates.loc[0, column] = True
+
+    with pytest.raises(ValueError):
+        add_features(rates, "EURUSD")
