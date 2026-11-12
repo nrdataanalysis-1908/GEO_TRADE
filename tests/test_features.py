@@ -3,8 +3,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from src.ingestion import market_ingestion
 from src.ingestion.market_ingestion import (
-    add_features, validate_rates, utc_bounds, _write_csv_atomically,
+    add_features, validate_rates, utc_bounds, validate_symbols, _write_csv_atomically,
 )
 
 
@@ -19,6 +20,70 @@ def sample_rates():
         "spread": np.full(40, 2),
         "real_volume": np.zeros(40),
     })
+
+
+@pytest.mark.parametrize(
+    "symbols",
+    [
+        [],
+        [""],
+        [" EURUSD"],
+        ["EURUSD", "EURUSD"],
+        ["EUR\nUSD"],
+    ],
+)
+def test_h1_symbol_validation_rejects_ambiguous_arguments(symbols):
+    with pytest.raises(ValueError):
+        validate_symbols(symbols)
+
+
+def test_h1_symbol_validation_preserves_order_and_none_means_all_symbols():
+    assert validate_symbols(["EURUSD", "GBPUSD"]) == ["EURUSD", "GBPUSD"]
+    assert validate_symbols(None) is None
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("time", float("nan")),
+        ("time", 1.5),
+        ("open", float("inf")),
+        ("high", 0.5),
+    ],
+)
+def test_add_features_rejects_invalid_timestamp_and_ohlc_values(column, value):
+    rates = sample_rates()
+    rates[column] = rates[column].astype(float)
+    rates.loc[0, column] = value
+    with pytest.raises(ValueError):
+        add_features(rates, "EURUSD")
+
+
+def test_add_features_rejects_duplicate_timestamps():
+    rates = sample_rates()
+    rates.loc[1, "time"] = rates.loc[0, "time"]
+    with pytest.raises(ValueError):
+        add_features(rates, "EURUSD")
+
+
+def test_h1_main_reports_output_directory_creation_failure(monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    class BlockedDirectory:
+        def mkdir(self, *args, **kwargs):
+            raise PermissionError("permission denied")
+
+    args = SimpleNamespace(
+        date="2026-11-03",
+        symbols=None,
+        output_dir=BlockedDirectory(),
+        terminal_path=None,
+    )
+    monkeypatch.setattr(market_ingestion, "parse_args", lambda: args)
+    monkeypatch.setattr(market_ingestion, "mt5", object())
+
+    assert market_ingestion.main() == 1
+    assert "output directory" in capsys.readouterr().out.lower()
 
 
 def test_feature_engineering_adds_expected_columns():
@@ -69,6 +134,11 @@ def test_h1_validation_rejects_invalid_volume_and_spread_fields(column, value):
     clean, rejected = validate_rates(rates)
     assert len(clean) == 39
     assert rejected == 1
+
+
+def test_utc_bounds_rejects_date_without_exclusive_next_day():
+    with pytest.raises(ValueError, match="exclusive next-day"):
+        utc_bounds("9999-12-31")
 
 
 @pytest.mark.parametrize("value", ["2026-W45-3", "20261104", "04-11-2026"])
@@ -201,4 +271,16 @@ def test_h1_atomic_csv_export_preserves_previous_file_on_write_failure(monkeypat
 
     assert destination.read_text(encoding="utf-8") == "previous-complete-export"
     assert not list(tmp_path.glob(".market.csv.*.tmp"))
+
+def test_feature_engineering_rejects_overflowed_derived_metrics():
+    rates = sample_rates().iloc[:2].copy()
+    rates.loc[0, ["open", "high", "low", "close"]] = [
+        1e-308, 2e-308, 5e-309, 1.5e-308,
+    ]
+    rates.loc[1, ["open", "high", "low", "close"]] = [
+        1e308, 1.5e308, 0.9e308, 1.2e308,
+    ]
+
+    with pytest.raises(ValueError, match="non-finite"):
+        add_features(rates, "EURUSD")
 

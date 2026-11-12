@@ -13,6 +13,8 @@ Execucao:
 """
 
 import argparse
+from collections.abc import Mapping
+import math
 import os
 import re
 import shutil
@@ -20,8 +22,11 @@ import sqlite3
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -52,9 +57,13 @@ DB_PATH_PADRAO = PASTA_BASE_PADRAO / "geo_trade_completo.db"
 
 TIMEFRAME = getattr(mt5, "TIMEFRAME_M1", None)
 TIMEFRAME_NOME = "M1"
-FUSO_BRASILIA = timezone(timedelta(hours=-3), name="America/Sao_Paulo")
+FUSO_BRASILIA = ZoneInfo("America/Sao_Paulo")
 PAUSA_ATIVO = 0.015
 SQLITE_INTEGER_MAX = (1 << 63) - 1
+
+
+def _has_control_characters(value):
+    return any(unicodedata.category(character) == "Cc" for character in value)
 
 
 # ============================================================
@@ -70,8 +79,15 @@ def validar_simbolos(symbols):
     normalized = []
     seen = set()
     for symbol in symbols:
-        if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
-            raise ValueError("each symbol must be a non-empty trimmed string")
+        if (
+            not isinstance(symbol, str)
+            or not symbol.strip()
+            or symbol != symbol.strip()
+            or _has_control_characters(symbol)
+        ):
+            raise ValueError(
+                "each symbol must be a non-empty trimmed string without control characters"
+            )
         if symbol in seen:
             raise ValueError(f"duplicate symbol argument: {symbol}")
         seen.add(symbol)
@@ -130,7 +146,10 @@ def obter_intervalo_utc(data_informada=None):
     inicio_local = datetime.combine(
         data_local, datetime_time.min, tzinfo=FUSO_BRASILIA
     )
-    fim_local = inicio_local + timedelta(days=1)
+    try:
+        fim_local = inicio_local + timedelta(days=1)
+    except OverflowError as exc:
+        raise ValueError("date must allow an exclusive next-day boundary") from exc
 
     return (
         data_local,
@@ -187,20 +206,61 @@ def preparar_banco(db_path):
             UNIQUE(symbol, timeframe, timestamp_utc)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_candles_symbol
-            ON candles(symbol);
-
         CREATE INDEX IF NOT EXISTS idx_candles_timestamp
             ON candles(timestamp_utc);
 
         CREATE INDEX IF NOT EXISTS idx_candles_symbol_time
             ON candles(symbol, timestamp_utc);
     """)
+    # The composite index already supports symbol-only lookups through its
+    # leading column; keeping both indexes adds write and storage overhead.
+    conn.execute("DROP INDEX IF EXISTS idx_candles_symbol")
     conn.commit()
     return conn
 
 
 def gravar_metadados_ativo(cursor, info):
+    try:
+        validar_simbolos([getattr(info, "name", None)])
+    except ValueError as exc:
+        raise ValueError("asset metadata requires a valid symbol") from exc
+    try:
+        digits = getattr(info, "digits", 0)
+        if digits is None:
+            digits = 0
+        if (
+            isinstance(digits, (bool, np.bool_))
+            or not isinstance(digits, (int, np.integer))
+            or digits < 0
+            or digits > SQLITE_INTEGER_MAX
+        ):
+            raise ValueError("digits must fit a non-negative SQLite signed 64-bit integer")
+        numeric_values = {}
+        for field in (
+            "point", "trade_tick_size", "trade_tick_value",
+            "volume_min", "volume_max", "volume_step",
+        ):
+            raw = getattr(info, field, 0)
+            if raw is None:
+                raw = 0
+            if isinstance(raw, (bool, np.bool_)):
+                raise ValueError(f"{field} must be numeric")
+            number = float(raw)
+            if not math.isfinite(number) or number < 0:
+                raise ValueError(f"{field} must be finite and non-negative")
+            numeric_values[field] = number
+        if numeric_values["volume_max"] > 0 and numeric_values["volume_min"] > numeric_values["volume_max"]:
+            raise ValueError("volume_min cannot exceed volume_max")
+        text_values = {}
+        for field in ("description", "path", "currency_base", "currency_profit", "currency_margin"):
+            raw = getattr(info, field, "")
+            if raw is None:
+                raw = ""
+            if not isinstance(raw, str) or _has_control_characters(raw):
+                raise ValueError(f"{field} must be text without control characters")
+            text_values[field] = raw
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("asset metadata contains invalid numeric or text fields") from exc
     agora = datetime.now(timezone.utc).isoformat()
 
     cursor.execute("""
@@ -225,18 +285,18 @@ def gravar_metadados_ativo(cursor, info):
             volume_step=excluded.volume_step
     """, (
         info.name,
-        getattr(info, "description", "") or "",
-        getattr(info, "path", "") or "",
-        getattr(info, "currency_base", "") or "",
-        getattr(info, "currency_profit", "") or "",
-        getattr(info, "currency_margin", "") or "",
-        getattr(info, "digits", 0) or 0,
-        getattr(info, "point", 0) or 0,
-        getattr(info, "trade_tick_size", 0) or 0,
-        getattr(info, "trade_tick_value", 0) or 0,
-        getattr(info, "volume_min", 0) or 0,
-        getattr(info, "volume_max", 0) or 0,
-        getattr(info, "volume_step", 0) or 0,
+        text_values["description"],
+        text_values["path"],
+        text_values["currency_base"],
+        text_values["currency_profit"],
+        text_values["currency_margin"],
+        int(digits),
+        numeric_values["point"],
+        numeric_values["trade_tick_size"],
+        numeric_values["trade_tick_value"],
+        numeric_values["volume_min"],
+        numeric_values["volume_max"],
+        numeric_values["volume_step"],
         agora,
     ))
 
@@ -246,7 +306,13 @@ def validar_candle(candle):
     import math
 
     try:
-        timestamp = float(candle["time"])
+        timestamp_decimal = Decimal(str(candle["time"]))
+        if (
+            not timestamp_decimal.is_finite()
+            or timestamp_decimal != timestamp_decimal.to_integral_value()
+        ):
+            return False
+        timestamp = int(timestamp_decimal)
         abertura = float(candle["open"])
         maxima = float(candle["high"])
         minima = float(candle["low"])
@@ -254,29 +320,30 @@ def validar_candle(candle):
         raw_contadores = tuple(
             candle[key] for key in ("tick_volume", "spread", "real_volume")
         )
-        contadores = tuple(float(value) for value in raw_contadores)
+        contadores = tuple(Decimal(str(value)) for value in raw_contadores)
         if any(isinstance(candle[key], (bool, np.bool_)) for key in (
             "time", "open", "high", "low", "close",
             "tick_volume", "spread", "real_volume"
         )):
             return False
-    except (KeyError, TypeError, ValueError, OverflowError):
+    except (KeyError, TypeError, ValueError, OverflowError, InvalidOperation):
         return False
 
-    if not math.isfinite(timestamp) or not timestamp.is_integer():
-        return False
     try:
-        datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+        datetime.fromtimestamp(timestamp, tz=timezone.utc)
     except (OverflowError, OSError, ValueError):
         return False
 
     precos = (abertura, maxima, minima, fechamento)
     if not all(math.isfinite(valor) for valor in precos):
         return False
-    if not all(math.isfinite(valor) and valor >= 0 and valor.is_integer()
-               for valor in contadores):
-        return False
-    if any(int(valor) > SQLITE_INTEGER_MAX for valor in raw_contadores):
+    if any(
+        not valor.is_finite()
+        or valor < 0
+        or valor != valor.to_integral_value()
+        or valor > SQLITE_INTEGER_MAX
+        for valor in contadores
+    ):
         return False
     if minima <= 0 or maxima < minima:
         return False
@@ -286,10 +353,16 @@ def validar_candle(candle):
 
 
 def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
-    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
-        raise ValueError("symbol must be a non-empty trimmed string")
-    if rates is None:
-        raise ValueError("rates must be an iterable of market candles")
+    try:
+        validar_simbolos([symbol])
+    except ValueError as exc:
+        raise ValueError("symbol must be a valid trimmed name without control characters") from exc
+    if rates is None or isinstance(rates, (str, bytes, bytearray, Mapping)):
+        raise ValueError("rates must be an iterable of candle records, not text or a mapping")
+    try:
+        rate_iterator = iter(rates)
+    except TypeError as exc:
+        raise ValueError("rates must be an iterable of candle records") from exc
     bounds = (inicio_utc, fim_utc)
     if any(
         not isinstance(bound, datetime)
@@ -305,12 +378,12 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
     valid_by_timestamp = {}
     conflicting_timestamps = set()
 
-    for candle in rates:
+    for candle in rate_iterator:
         if not validar_candle(candle):
             rejeitados += 1
             continue
 
-        timestamp = int(candle["time"])
+        timestamp = int(Decimal(str(candle["time"])))
         instante_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         # O MT5 pode devolver limites inclusivos. O filtro assegura
         # que somente candles pertencentes ao dia solicitado sejam gravados.
@@ -322,9 +395,9 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             float(candle["high"]),
             float(candle["low"]),
             float(candle["close"]),
-            int(candle["tick_volume"]),
-            int(candle["spread"]),
-            int(candle["real_volume"]),
+            int(Decimal(str(candle["tick_volume"]))),
+            int(Decimal(str(candle["spread"]))),
+            int(Decimal(str(candle["real_volume"]))),
         )
         if timestamp in conflicting_timestamps:
             rejeitados += 1
@@ -369,9 +442,9 @@ def gravar_candles(cursor, symbol, rates, inicio_utc, fim_utc):
             float(candle["high"]),
             float(candle["low"]),
             float(candle["close"]),
-            int(candle["tick_volume"]),
-            int(candle["spread"]),
-            int(candle["real_volume"]),
+            int(Decimal(str(candle["tick_volume"]))),
+            int(Decimal(str(candle["spread"]))),
+            int(Decimal(str(candle["real_volume"]))),
         ))
 
         if cursor.rowcount > 0:
@@ -585,6 +658,8 @@ def main():
                 )
 
         total_ativos = len(ativos)
+        if total_ativos == 0:
+            raise RuntimeError("MT5 returned no available symbols")
         print(CIANO + f"✓ {total_ativos} ativos identificados")
         print()
         print(AZUL + "═" * 80)
@@ -696,12 +771,18 @@ def main():
 
     finally:
         if conn is not None:
-            conn.close()
-            print(CIANO + "✓ Conexao SQLite encerrada")
+            try:
+                conn.close()
+                print(CIANO + "✓ Conexao SQLite encerrada")
+            except Exception as erro_fechamento:
+                print(AMARELO + f"⚠ Falha ao fechar SQLite: {erro_fechamento}")
 
         if mt5_inicializado:
-            mt5.shutdown()
-            print(CIANO + "✓ MetaTrader 5 encerrado")
+            try:
+                mt5.shutdown()
+                print(CIANO + "✓ MetaTrader 5 encerrado")
+            except Exception as erro_encerramento:
+                print(AMARELO + f"⚠ Falha ao encerrar MT5: {erro_encerramento}")
 
     if not args.no_open_db and db_path.exists():
         abrir_db_browser(db_path)

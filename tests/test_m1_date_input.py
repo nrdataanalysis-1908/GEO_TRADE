@@ -15,3 +15,7 @@ def test_none_remains_the_only_default_date_signal():
     assert selected.isoformat() == start.astimezone(__import__("datetime").timezone(
         __import__("datetime").timedelta(hours=-3)
     )).date().isoformat()
+
+def test_last_calendar_day_is_rejected_with_a_clear_value_error():
+    with pytest.raises(ValueError, match="exclusive next-day"):
+        obter_intervalo_utc("9999-12-31")

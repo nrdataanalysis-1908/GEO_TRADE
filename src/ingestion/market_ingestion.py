@@ -4,7 +4,9 @@ import argparse
 import os
 import tempfile
 import re
+import unicodedata
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 try:
@@ -20,8 +22,13 @@ init(autoreset=True)
 BLUE, CYAN, YELLOW, RED = Fore.LIGHTBLUE_EX, Fore.LIGHTCYAN_EX, Fore.LIGHTYELLOW_EX, Fore.LIGHTRED_EX
 TIMEFRAME = getattr(mt5, "TIMEFRAME_H1", None)
 TIMEFRAME_NAME = "H1"
-WARMUP_HOURS = 60
+# Fourteen calendar days retain enough H1 history across FX weekend closures for EMA(26) warm-up.
+WARMUP_HOURS = 14 * 24
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _has_control_characters(value):
+    return any(unicodedata.category(character) == "Cc" for character in value)
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 
 
@@ -40,16 +47,69 @@ def utc_bounds(day_text):
         raise ValueError("date must use YYYY-MM-DD")
     selected = date.fromisoformat(day_text)
     start = datetime.combine(selected, time.min, tzinfo=timezone.utc)
-    return start, start + timedelta(days=1)
+    try:
+        end = start + timedelta(days=1)
+    except OverflowError as exc:
+        raise ValueError("date must allow an exclusive next-day boundary") from exc
+    return start, end
+
+
+def validate_symbols(symbols):
+    """Validate an explicit H1 symbol list without changing its order."""
+    if symbols is None:
+        return None
+    if not isinstance(symbols, (list, tuple)) or not symbols:
+        raise ValueError("symbols must be a non-empty list when provided")
+    normalized = []
+    seen = set()
+    for symbol in symbols:
+        if (
+            not isinstance(symbol, str)
+            or not symbol.strip()
+            or symbol != symbol.strip()
+            or _has_control_characters(symbol)
+        ):
+            raise ValueError(
+                "each symbol must be a non-empty trimmed string without control characters"
+            )
+        if symbol in seen:
+            raise ValueError(f"duplicate symbol argument: {symbol}")
+        seen.add(symbol)
+        normalized.append(symbol)
+    return normalized
+
+
+def _parse_integral_timestamp(value):
+    """Return exact Unix seconds only when the value is integral and pandas-representable."""
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not number.is_finite() or number != number.to_integral_value():
+        return None
+    try:
+        timestamp = int(number)
+        converted = pd.to_datetime(timestamp, unit="s", utc=True, errors="coerce")
+    except (OverflowError, TypeError, ValueError):
+        return None
+    return None if pd.isna(converted) else timestamp
 
 
 def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if not isinstance(rates, pd.DataFrame):
         raise TypeError("rates must be a pandas DataFrame")
-    if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip():
-        raise ValueError("symbol must be a non-empty trimmed string")
-    if not isinstance(timeframe, str) or not timeframe.strip() or timeframe != timeframe.strip():
-        raise ValueError("timeframe must be a non-empty trimmed string")
+    if (
+        not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip()
+        or _has_control_characters(symbol)
+    ):
+        raise ValueError("symbol must be a non-empty trimmed string without control characters")
+    if (
+        not isinstance(timeframe, str) or not timeframe.strip() or timeframe != timeframe.strip()
+        or _has_control_characters(timeframe)
+    ):
+        raise ValueError("timeframe must be a non-empty trimmed string without control characters")
     required = ("time", "open", "high", "low", "close")
     missing = [column for column in required if column not in rates.columns]
     if missing:
@@ -60,8 +120,43 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if rates.empty:
         raise ValueError("rates must contain at least one market bar")
 
+    df = rates.copy().reset_index(drop=True)
+    boolean_rows = df[list(required)].apply(
+        lambda column: column.map(
+            lambda value: isinstance(value, (bool, np.bool_))
+        )
+    ).any(axis=1)
+    parsed_times = [_parse_integral_timestamp(value) for value in df["time"].tolist()]
+    if any(value is None for value in parsed_times):
+        raise ValueError("time values must be exact integral Unix seconds within pandas range")
+    df["time"] = pd.Series(parsed_times, index=df.index, dtype="int64")
+    try:
+        for column in required[1:]:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+        numeric_values = df[list(required)].to_numpy(dtype=float)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError("feature columns must contain finite numeric values") from exc
+    if boolean_rows.any() or not np.isfinite(numeric_values).all():
+        raise ValueError("feature columns must contain finite numeric values")
+
+    timestamps = pd.to_datetime(df["time"], unit="s", utc=True, errors="coerce")
+    if timestamps.isna().any():
+        raise ValueError("time values must be representable as UTC timestamps")
+    if df["time"].duplicated().any():
+        raise ValueError("time values must be unique per symbol and timeframe")
+
+    prices = df[["open", "high", "low", "close"]].to_numpy(dtype=float)
+    opening, highest, lowest, closing = prices.T
+    if (
+        (prices <= 0).any()
+        or (highest < np.maximum(opening, closing)).any()
+        or (lowest > np.minimum(opening, closing)).any()
+        or (highest < lowest).any()
+    ):
+        raise ValueError("OHLC values must be positive and internally consistent")
+
     # Rolling indicators must be calculated in chronological order, not merely sorted afterward.
-    df = rates.copy().sort_values("time", kind="stable").reset_index(drop=True)
+    df = df.sort_values("time", kind="stable").reset_index(drop=True)
     df["timestamp_utc"] = pd.to_datetime(df["time"], unit="s", utc=True)
     df["timestamp_brasilia"] = df["timestamp_utc"].dt.tz_convert("America/Sao_Paulo")
     df["symbol"], df["timeframe"] = symbol, timeframe
@@ -121,6 +216,26 @@ def _safe_numeric_value(value):
         return np.nan
 
 
+_SQLITE_INTEGER_MAX = (1 << 63) - 1
+
+
+def _parse_nonnegative_int64(value):
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if (
+        not number.is_finite()
+        or number < 0
+        or number != number.to_integral_value()
+        or number > _SQLITE_INTEGER_MAX
+    ):
+        return None
+    return int(number)
+
+
 def validate_rates(rates):
     if not isinstance(rates, pd.DataFrame):
         raise TypeError("rates must be a pandas DataFrame")
@@ -139,7 +254,9 @@ def validate_rates(rates):
     boolean_rows = clean[required].apply(
         lambda column: column.map(lambda value: isinstance(value, (bool, np.bool_)))
     ).any(axis=1)
-    for column in required:
+    parsed_times = [_parse_integral_timestamp(value) for value in clean["time"].tolist()]
+    clean["time"] = pd.Series(parsed_times, index=clean.index, dtype="object")
+    for column in ("open", "high", "low", "close"):
         try:
             clean[column] = pd.to_numeric(clean[column], errors="coerce")
         except (OverflowError, TypeError, ValueError):
@@ -147,22 +264,22 @@ def validate_rates(rates):
             # column conversion. Fall back to row-wise coercion so that only
             # malformed records are rejected instead of the complete batch.
             clean[column] = clean[column].map(_safe_numeric_value)
+    for column in ("tick_volume", "spread", "real_volume"):
+        parsed_counters = [_parse_nonnegative_int64(value) for value in clean[column].tolist()]
+        clean[column] = pd.Series(parsed_counters, index=clean.index, dtype="object")
     clean = clean.dropna(subset=required).copy()
     if clean.empty:
         return clean, len(rates)
+    clean["time"] = clean["time"].astype("int64")
+    for column in ("tick_volume", "spread", "real_volume"):
+        clean[column] = clean[column].astype("int64")
 
     prices = clean[["open", "high", "low", "close"]].to_numpy(dtype=float)
-    timestamps = clean["time"].to_numpy(dtype=float)
     valid = ~boolean_rows.loc[clean.index].to_numpy()
     valid &= np.isfinite(prices).all(axis=1)
     valid &= (prices > 0).all(axis=1)
-    valid &= np.isfinite(timestamps) & (timestamps == np.floor(timestamps))
     representable = pd.to_datetime(clean["time"], unit="s", utc=True, errors="coerce")
     valid &= representable.notna().to_numpy()
-
-    for column in ("tick_volume", "spread", "real_volume"):
-        values = clean[column].to_numpy(dtype=float)
-        valid &= np.isfinite(values) & (values >= 0) & (values == np.floor(values))
 
     valid &= (
         (clean["high"] >= clean[["open", "close", "low"]].max(axis=1)).to_numpy()
@@ -188,9 +305,24 @@ def validate_rates(rates):
 
 
 def collect_symbol(symbol, start, end):
+    validate_symbols([symbol])
+    bounds = (start, end)
+    if any(
+        not isinstance(bound, datetime)
+        or bound.tzinfo is None
+        or bound.utcoffset() != timedelta(0)
+        for bound in bounds
+    ):
+        raise ValueError("start and end must be UTC-aware datetimes")
+    if end <= start:
+        raise ValueError("end must be later than start")
+    try:
+        warmup_start = start - timedelta(hours=WARMUP_HOURS)
+    except OverflowError as exc:
+        raise ValueError("start is too early for the configured indicator warmup") from exc
     if not mt5.symbol_select(symbol, True):
         return None, 0, f"symbol_select: {mt5.last_error()}"
-    rates = mt5.copy_rates_range(symbol, TIMEFRAME, start - timedelta(hours=WARMUP_HOURS), end)
+    rates = mt5.copy_rates_range(symbol, TIMEFRAME, warmup_start, end)
     if rates is None:
         return None, 0, f"copy_rates_range: {mt5.last_error()}"
     if len(rates) == 0:
@@ -216,7 +348,8 @@ def _write_csv_atomically(frame, destination, columns):
     os.close(descriptor)
     try:
         frame[columns].to_csv(temporary_name, index=False, encoding="utf-8-sig")
-        with open(temporary_name, "rb") as stream:
+        # Windows FlushFileBuffers requires a handle opened with write access.
+        with open(temporary_name, "rb+") as stream:
             os.fsync(stream.fileno())
         os.replace(temporary_name, destination)
     except Exception:
@@ -226,6 +359,11 @@ def _write_csv_atomically(frame, destination, columns):
 
 def main():
     args = parse_args()
+    try:
+        args.symbols = validate_symbols(getattr(args, "symbols", None))
+    except ValueError as exc:
+        print(RED + f"Invalid symbols: {exc}")
+        return 2
     print(CYAN + "GEO_TRADE | Desenvolvido por Nadison Roberto | NR TECH | © 2026")
     if mt5 is None:
         print(RED + "MetaTrader5 package is required for live H1 ingestion.")
@@ -235,7 +373,11 @@ def main():
     except ValueError as exc:
         print(RED + f"Invalid date: {exc}")
         return 2
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(RED + f"Cannot create output directory {args.output_dir}: {exc}")
+        return 1
     output = args.output_dir / (
         f"GEO_TRADE_MARKET_H1_DAY_{args.date.replace('-', '')}_"
         f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
@@ -297,8 +439,11 @@ def main():
         return 1
     finally:
         if connected:
-            mt5.shutdown()
-            print(CYAN + "MT5 connection closed.")
+            try:
+                mt5.shutdown()
+                print(CYAN + "MT5 connection closed.")
+            except Exception as exc:
+                print(YELLOW + f"MT5 shutdown failed: {exc}")
 
 
 if __name__ == "__main__":

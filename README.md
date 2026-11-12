@@ -67,7 +67,7 @@ The H1 entry point is `src.ingestion.market_ingestion`.
 
 1. Initialize the local MetaTrader 5 terminal and verify account availability.
 2. Resolve requested symbols or enumerate symbols available in the terminal.
-3. Retrieve H1 bars with a preceding warm-up window.
+3. Retrieve H1 bars with a 14-calendar-day warm-up window so recursive indicators retain context across weekend closures; the final export is filtered back to the requested UTC day.
 4. Validate required columns, finite and representable timestamps, non-boolean market values and OHLC consistency; collapse identical duplicate bars and reject conflicting bars at the same timestamp.
 5. Sort bars chronologically before calculating candle anatomy, returns, moving averages, RSI, ATR, MACD, Bollinger bands and time features.
 6. Filter to the requested UTC calendar day.
@@ -83,13 +83,27 @@ python -m src.ingestion.market_ingestion --date 2026-08-21 --symbols EURUSD GBPU
 
 The indicators are descriptive features, not trading signals or evidence of predictive performance. The last H1 bar may still be forming.
 
+### H1 indicator conventions
+
+For reproducibility, the current feature implementation uses these conventions:
+
+- `sma_5` / `sma_10`: simple rolling means of close over 5 and 10 bars.
+- `ema_5` / `ema_10`: exponential moving averages with `adjust=False`.
+- `rsi_14`: 14-bar simple rolling means of positive and negative close changes. It is not Wilder-smoothed RSI; a flat window is assigned 50 and a window with gains but no losses is assigned 100.
+- `atr_14`: 14-bar simple rolling mean of True Range, not Wilder-smoothed ATR.
+- `macd`: EMA(12) minus EMA(26); `macd_signal` is the 9-bar EMA of MACD.
+- Bollinger bands: 20-bar simple mean plus/minus two rolling sample standard deviations.
+- `volatility_10`: 10-bar rolling sample standard deviation of close-to-close simple returns; `volatility_pct` scales it by 100.
+
+These definitions are part of the dataset contract. A future switch to Wilder smoothing or another convention should be versioned because it changes historical feature values.
+
 ## M1 pipeline: historical candles and SQLite
 
 The M1 entry point is `src/ingestion/trade2_geo_trade_v2.py`. It stores raw one-minute OHLCV-style candle fields and instrument metadata; it does not calculate technical indicators.
 
 Key behaviors:
 
-- Interprets `--date` as a calendar date in Brasília (UTC−03:00); by default, processes the previous Brasília day.
+- Interprets `--date` as a calendar date in the IANA `America/Sao_Paulo` timezone; historical daylight-saving transitions are applied, and the default remains the previous Brasília calendar day.
 - Converts the local day boundaries to UTC and applies a half-open interval: `[start, end)`.
 - Stores UTC and Brasília timestamps for each candle.
 - Validates each M1 candle before persistence: finite positive prices, coherent OHLC bounds and non-negative integral volume/spread fields; booleans and invalid records are rejected before SQLite writes.
@@ -115,7 +129,7 @@ Optional arguments:
 - `--db-path`: SQLite database destination (default: `~/Downloads/geo_trade_completo.db`).
 - `--no-open-db`: skip the optional DB Browser launch.
 
-The M1 script requires the `MetaTrader5` and `colorama` Python packages. The terminal must be installed, running or launchable at the configured path, and authenticated with access to the requested market history.
+The M1 script requires the `MetaTrader5`, `colorama` and `tzdata` Python packages. The IANA timezone database is required to convert historical Brasília dates correctly, including dates affected by daylight-saving transitions. The terminal must be installed, running or launchable at the configured path, and authenticated with access to the requested market history.
 
 ## Requirements
 
