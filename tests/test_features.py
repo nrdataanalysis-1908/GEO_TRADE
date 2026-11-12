@@ -313,3 +313,15 @@ def test_add_features_rejects_boolean_market_inputs(column):
 
     with pytest.raises(ValueError):
         add_features(rates, "EURUSD")
+
+
+def test_h1_validation_drops_unrepresentable_integer_price_without_losing_valid_rows():
+    rates = sample_rates()
+    rates["open"] = rates["open"].astype(object)
+    rates.loc[0, "open"] = 10**400
+
+    clean, rejected = validate_rates(rates)
+
+    assert len(clean) == len(rates) - 1
+    assert rejected == 1
+    assert clean["time"].is_monotonic_increasing
