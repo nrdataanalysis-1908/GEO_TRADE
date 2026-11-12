@@ -284,3 +284,23 @@ def test_feature_engineering_rejects_overflowed_derived_metrics():
     with pytest.raises(ValueError, match="non-finite"):
         add_features(rates, "EURUSD")
 
+def test_add_features_rejects_complex_market_prices():
+    rates = sample_rates().iloc[:2].copy()
+    rates["close"] = rates["close"].astype(object)
+    rates.loc[0, "close"] = 1.005 + 0.25j
+
+    with pytest.raises(ValueError, match="real"):
+        add_features(rates, "EURUSD")
+
+
+def test_h1_validation_rejects_complex_price_rows_without_real_part_coercion():
+    rates = sample_rates()
+    rates["close"] = rates["close"].astype(object)
+    rates.loc[0, "close"] = 1.005 + 0.25j
+
+    clean, rejected = validate_rates(rates)
+
+    assert len(clean) == 39
+    assert rejected == 1
+    assert np.isrealobj(clean["close"].to_numpy())
+
