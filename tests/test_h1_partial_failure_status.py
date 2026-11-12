@@ -78,3 +78,30 @@ def test_h1_main_returns_nonzero_when_partial_export_has_symbol_errors(
     exported = pd.read_csv(exports[0], encoding="utf-8-sig")
     assert exported["symbol"].tolist() == ["EURUSD"]
     assert terminal.shutdown_called
+
+
+
+def test_h1_main_does_not_publish_empty_csv_when_all_symbols_fail(monkeypatch, tmp_path):
+    terminal = FakeTerminal()
+    monkeypatch.setattr(
+        h1,
+        "parse_args",
+        lambda: SimpleNamespace(
+            date="2026-11-03",
+            symbols=None,
+            terminal_path="fake-terminal",
+            output_dir=tmp_path,
+        ),
+    )
+    monkeypatch.setattr(h1, "mt5", terminal)
+    monkeypatch.setattr(
+        h1,
+        "collect_symbol",
+        lambda symbol, start, end: (None, 0, "simulated provider failure"),
+    )
+
+    result = h1.main()
+
+    assert result == 1
+    assert list(tmp_path.glob("GEO_TRADE_MARKET_H1_DAY_20261103_*.csv")) == []
+    assert terminal.shutdown_called
