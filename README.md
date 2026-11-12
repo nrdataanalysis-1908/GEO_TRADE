@@ -82,6 +82,7 @@ python -m src.ingestion.market_ingestion --date 2026-08-21 --symbols EURUSD GBPU
 ```
 
 The indicators are descriptive features, not trading signals or evidence of predictive performance. The last H1 bar may still be forming.
+The feature stage also rejects numeric overflow in derived metrics instead of exporting infinite values; expected warm-up `NaN` values remain part of the indicator contract.
 
 ### H1 indicator conventions
 
