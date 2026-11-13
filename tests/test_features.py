@@ -353,3 +353,14 @@ def test_feature_warmup_preserves_only_documented_rolling_null_windows():
     assert result["bollinger_middle"].iloc[19:].notna().all()
     numeric = result.select_dtypes(include=[np.number]).to_numpy(dtype=float)
     assert not np.isinf(numeric).any()
+
+
+def test_h1_validation_does_not_mutate_input_dataframe():
+    rates = sample_rates()
+    original = rates.copy(deep=True)
+
+    clean, rejected = validate_rates(rates)
+
+    pd.testing.assert_frame_equal(rates, original)
+    assert len(clean) == len(rates)
+    assert rejected == 0
