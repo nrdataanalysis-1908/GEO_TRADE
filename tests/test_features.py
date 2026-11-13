@@ -364,3 +364,15 @@ def test_h1_validation_does_not_mutate_input_dataframe():
     pd.testing.assert_frame_equal(rates, original)
     assert len(clean) == len(rates)
     assert rejected == 0
+
+
+def test_h1_validation_does_not_mutate_source_when_rejecting_rows():
+    rates = sample_rates()
+    rates.loc[0, "close"] = np.nan
+    original = rates.copy(deep=True)
+
+    clean, rejected = validate_rates(rates)
+
+    pd.testing.assert_frame_equal(rates, original)
+    assert len(clean) == len(rates) - 1
+    assert rejected == 1
