@@ -537,3 +537,10 @@ def test_add_features_reports_missing_required_columns():
     with pytest.raises(ValueError, match="Missing required feature columns: high"):
         add_features(rates, "EURUSD")
 
+def test_add_features_rejects_duplicate_required_columns():
+    rates = sample_rates()
+    rates = pd.concat([rates, rates[["close"]]], axis=1)
+
+    with pytest.raises(ValueError, match="Duplicate feature columns: close"):
+        add_features(rates, "EURUSD")
+
