@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _has_control_characters(value):
-    return any(unicodedata.category(character) == "Cc" for character in value)
+    return any(unicodedata.category(character) in {"Cc", "Cf"} for character in value)
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 
 
