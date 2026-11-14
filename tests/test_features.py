@@ -544,7 +544,7 @@ def test_add_features_rejects_duplicate_required_columns():
     with pytest.raises(ValueError, match="Duplicate feature columns: close"):
         add_features(rates, "EURUSD")
 
-@pytest.mark.parametrize("timeframe", ["", " H1", "H1 ", "H1\\n"])
+@pytest.mark.parametrize("timeframe", ["", " H1", "H1 ", "H1\n"])
 def test_add_features_rejects_ambiguous_timeframe_labels(timeframe):
     with pytest.raises(ValueError, match="timeframe must be a non-empty trimmed string"):
         add_features(sample_rates(), "EURUSD", timeframe=timeframe)
