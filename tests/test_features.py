@@ -476,3 +476,20 @@ def test_macd_signal_and_histogram_follow_documented_ema_periods():
         expected_macd.iloc[-1] - expected_signal.iloc[-1]
     )
 
+def test_rsi_uses_simple_rolling_gain_and_loss_averages():
+    rates = sample_rates()
+    result = add_features(rates, "EURUSD")
+    delta = rates["close"].diff()
+    average_gain = delta.clip(lower=0).rolling(14).mean()
+    average_loss = -delta.clip(upper=0).rolling(14).mean()
+    relative_strength = average_gain / average_loss.replace(0, np.nan)
+    expected = 100 - 100 / (1 + relative_strength)
+    expected.loc[(average_loss == 0) & (average_gain > 0)] = 100
+    expected.loc[(average_loss == 0) & (average_gain == 0)] = 50
+
+    pd.testing.assert_series_equal(
+        result["rsi_14"].reset_index(drop=True),
+        expected.reset_index(drop=True),
+        check_names=False,
+    )
+
