@@ -443,3 +443,11 @@ def test_bollinger_bands_use_sample_standard_deviation():
         expected_middle - 2 * expected_std
     )
 
+def test_volatility_uses_sample_standard_deviation_of_simple_returns():
+    rates = sample_rates()
+    result = add_features(rates, "EURUSD")
+    expected = rates["close"].pct_change().rolling(10).std(ddof=1).iloc[-1]
+
+    assert result["volatility_10"].iloc[-1] == pytest.approx(expected)
+    assert result["volatility_pct"].iloc[-1] == pytest.approx(expected * 100)
+
