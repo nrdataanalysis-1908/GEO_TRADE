@@ -505,3 +505,14 @@ def test_h1_brasilia_timestamps_respect_historical_dst_offsets():
     assert str(result["timestamp_brasilia"].iloc[0]) == "2018-11-04 01:00:00-02:00"
     assert str(result["timestamp_brasilia"].iloc[1]) == "2019-02-16 23:00:00-03:00"
 
+def test_candle_direction_distinguishes_buy_sell_and_doji():
+    rates = sample_rates().iloc[:3].copy()
+    rates["open"] = [1.0, 1.1, 1.1]
+    rates["close"] = [1.1, 1.0, 1.1]
+    rates["high"] = [1.2, 1.2, 1.2]
+    rates["low"] = [0.9, 0.9, 0.9]
+
+    result = add_features(rates, "EURUSD")
+
+    assert result["candle_direction"].tolist() == ["BUY", "SELL", "DOJI"]
+
