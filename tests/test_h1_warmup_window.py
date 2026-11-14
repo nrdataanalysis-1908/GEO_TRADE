@@ -54,3 +54,17 @@ def test_collect_symbol_requests_fourteen_day_warmup_and_filters_requested_day(m
     )
     assert frame is not None
     assert frame["timestamp_utc"].tolist() == [pd.Timestamp(start + timedelta(hours=1))]
+
+def test_collect_symbol_includes_start_and_excludes_end_boundary(monkeypatch):
+    start = datetime(2026, 11, 9, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    terminal = FakeMetaTrader([_rate(start), _rate(end)])
+    monkeypatch.setattr(market_ingestion, "mt5", terminal)
+
+    frame, rejected, error = market_ingestion.collect_symbol("EURUSD", start, end)
+
+    assert error is None
+    assert rejected == 0
+    assert frame is not None
+    assert frame["timestamp_utc"].tolist() == [pd.Timestamp(start)]
+
