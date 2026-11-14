@@ -406,7 +406,7 @@ def main():
         account = mt5.account_info()
         if account is None:
             raise RuntimeError(f"No authenticated MT5 account: {mt5.last_error()}")
-        print(CYAN + f"Connected | account={account.login} | server={account.server}")
+        print(CYAN + "Connected | authenticated MT5 session available (account details omitted)")
         if args.symbols:
             symbols = args.symbols
         else:
