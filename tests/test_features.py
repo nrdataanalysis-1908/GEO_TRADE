@@ -284,6 +284,19 @@ def test_feature_engineering_rejects_overflowed_derived_metrics():
     with pytest.raises(ValueError, match="non-finite"):
         add_features(rates, "EURUSD")
 
+def test_rsi_assigns_neutral_value_to_a_flat_market_window():
+    rates = sample_rates()
+    rates["open"] = 1.0
+    rates["high"] = 1.01
+    rates["low"] = 0.99
+    rates["close"] = 1.0
+
+    result = add_features(rates, "EURUSD")
+
+    assert result["rsi_14"].iloc[:13].isna().all()
+    assert (result["rsi_14"].iloc[13:] == 50).all()
+
+
 def test_add_features_rejects_complex_market_prices():
     rates = sample_rates().iloc[:2].copy()
     rates["close"] = rates["close"].astype(object)
