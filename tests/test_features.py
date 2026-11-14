@@ -428,3 +428,18 @@ def test_atr_uses_previous_close_for_true_range_gaps():
         true_range.rolling(14).mean().iloc[14]
     )
 
+def test_bollinger_bands_use_sample_standard_deviation():
+    rates = sample_rates()
+    result = add_features(rates, "EURUSD")
+    window = rates["close"].iloc[-20:]
+    expected_middle = window.mean()
+    expected_std = window.std(ddof=1)
+
+    assert result["bollinger_middle"].iloc[-1] == pytest.approx(expected_middle)
+    assert result["bollinger_upper"].iloc[-1] == pytest.approx(
+        expected_middle + 2 * expected_std
+    )
+    assert result["bollinger_lower"].iloc[-1] == pytest.approx(
+        expected_middle - 2 * expected_std
+    )
+
