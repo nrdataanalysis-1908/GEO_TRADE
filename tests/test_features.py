@@ -531,3 +531,9 @@ def test_candle_anatomy_matches_ohlc_geometry():
     assert result["upper_wick"].tolist() == pytest.approx([0.1, 0.1, 0.1])
     assert result["lower_wick"].tolist() == pytest.approx([0.1, 0.1, 0.2])
 
+def test_add_features_reports_missing_required_columns():
+    rates = sample_rates().drop(columns=["high"])
+
+    with pytest.raises(ValueError, match="Missing required feature columns: high"):
+        add_features(rates, "EURUSD")
+
