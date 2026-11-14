@@ -451,3 +451,14 @@ def test_volatility_uses_sample_standard_deviation_of_simple_returns():
     assert result["volatility_10"].iloc[-1] == pytest.approx(expected)
     assert result["volatility_pct"].iloc[-1] == pytest.approx(expected * 100)
 
+def test_ema_uses_recursive_adjust_false_convention():
+    rates = sample_rates()
+    result = add_features(rates, "EURUSD")
+    expected = rates["close"].ewm(span=5, adjust=False).mean()
+
+    pd.testing.assert_series_equal(
+        result["ema_5"].reset_index(drop=True),
+        expected.reset_index(drop=True),
+        check_names=False,
+    )
+
