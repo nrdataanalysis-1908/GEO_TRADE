@@ -63,7 +63,7 @@ SQLITE_INTEGER_MAX = (1 << 63) - 1
 
 
 def _has_control_characters(value):
-    return any(unicodedata.category(character) == "Cc" for character in value)
+    return any(unicodedata.category(character) in {"Cc", "Cf"} for character in value)
 
 
 # ============================================================
