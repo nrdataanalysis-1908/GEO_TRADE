@@ -462,3 +462,17 @@ def test_ema_uses_recursive_adjust_false_convention():
         check_names=False,
     )
 
+def test_macd_signal_and_histogram_follow_documented_ema_periods():
+    rates = sample_rates()
+    result = add_features(rates, "EURUSD")
+    ema_12 = rates["close"].ewm(span=12, adjust=False).mean()
+    ema_26 = rates["close"].ewm(span=26, adjust=False).mean()
+    expected_macd = ema_12 - ema_26
+    expected_signal = expected_macd.ewm(span=9, adjust=False).mean()
+
+    assert result["macd"].iloc[-1] == pytest.approx(expected_macd.iloc[-1])
+    assert result["macd_signal"].iloc[-1] == pytest.approx(expected_signal.iloc[-1])
+    assert result["macd_histogram"].iloc[-1] == pytest.approx(
+        expected_macd.iloc[-1] - expected_signal.iloc[-1]
+    )
+
