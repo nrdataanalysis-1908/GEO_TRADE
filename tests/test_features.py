@@ -516,3 +516,18 @@ def test_candle_direction_distinguishes_buy_sell_and_doji():
 
     assert result["candle_direction"].tolist() == ["BUY", "SELL", "DOJI"]
 
+def test_candle_anatomy_matches_ohlc_geometry():
+    rates = sample_rates().iloc[:3].copy()
+    rates["open"] = [1.0, 1.1, 1.1]
+    rates["close"] = [1.1, 1.0, 1.1]
+    rates["high"] = [1.2, 1.2, 1.2]
+    rates["low"] = [0.9, 0.9, 0.9]
+
+    result = add_features(rates, "EURUSD")
+
+    assert result["range"].tolist() == pytest.approx([0.3, 0.3, 0.3])
+    assert result["body"].tolist() == pytest.approx([0.1, -0.1, 0.0])
+    assert result["body_abs"].tolist() == pytest.approx([0.1, 0.1, 0.0])
+    assert result["upper_wick"].tolist() == pytest.approx([0.1, 0.1, 0.1])
+    assert result["lower_wick"].tolist() == pytest.approx([0.1, 0.1, 0.2])
+
