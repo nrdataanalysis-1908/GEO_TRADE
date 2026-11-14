@@ -493,3 +493,15 @@ def test_rsi_uses_simple_rolling_gain_and_loss_averages():
         check_names=False,
     )
 
+def test_h1_brasilia_timestamps_respect_historical_dst_offsets():
+    rates = sample_rates().iloc[:2].copy()
+    rates["time"] = [
+        int(pd.Timestamp("2018-11-04T03:00:00Z").timestamp()),
+        int(pd.Timestamp("2019-02-17T02:00:00Z").timestamp()),
+    ]
+
+    result = add_features(rates, "EURUSD")
+
+    assert str(result["timestamp_brasilia"].iloc[0]) == "2018-11-04 01:00:00-02:00"
+    assert str(result["timestamp_brasilia"].iloc[1]) == "2019-02-16 23:00:00-03:00"
+
