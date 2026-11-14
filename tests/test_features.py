@@ -389,3 +389,18 @@ def test_h1_validation_does_not_mutate_source_when_rejecting_rows():
     pd.testing.assert_frame_equal(rates, original)
     assert len(clean) == len(rates) - 1
     assert rejected == 1
+
+def test_rsi_reaches_expected_boundaries_for_one_directional_market():
+    for close, expected in (
+        (np.linspace(1.0, 1.04, 40), 100.0),
+        (np.linspace(1.04, 1.0, 40), 0.0),
+    ):
+        rates = sample_rates()
+        rates["close"] = close
+        rates["open"] = close
+        rates["high"] = close + 0.001
+        rates["low"] = close - 0.001
+
+        result = add_features(rates, "EURUSD")
+        assert (result["rsi_14"].iloc[13:] == expected).all()
+
