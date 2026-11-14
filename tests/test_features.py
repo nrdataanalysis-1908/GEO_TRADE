@@ -404,3 +404,27 @@ def test_rsi_reaches_expected_boundaries_for_one_directional_market():
         result = add_features(rates, "EURUSD")
         assert (result["rsi_14"].iloc[13:] == expected).all()
 
+def test_atr_uses_previous_close_for_true_range_gaps():
+    rates = sample_rates().iloc[:15].copy()
+    previous_close = rates.loc[13, "close"]
+    rates.loc[14, "low"] = previous_close + 0.02
+    rates.loc[14, "open"] = previous_close + 0.03
+    rates.loc[14, "close"] = previous_close + 0.025
+    rates.loc[14, "high"] = previous_close + 0.04
+
+    result = add_features(rates, "EURUSD")
+    prior_close = result["close"].shift()
+    true_range = pd.concat(
+        [
+            result["high"] - result["low"],
+            (result["high"] - prior_close).abs(),
+            (result["low"] - prior_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+
+    assert true_range.iloc[14] == pytest.approx(0.04)
+    assert result["atr_14"].iloc[14] == pytest.approx(
+        true_range.rolling(14).mean().iloc[14]
+    )
+
