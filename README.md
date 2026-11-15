@@ -82,7 +82,7 @@ python -m src.ingestion.market_ingestion --date 2026-08-21 --symbols EURUSD GBPU
 ```
 
 The indicators are descriptive features, not trading signals or evidence of predictive performance. The last H1 bar may still be forming.
-The feature stage also rejects numeric overflow in derived metrics instead of exporting infinite values; expected warm-up `NaN` values remain part of the indicator contract.
+The feature stage rejects non-finite derived metrics, including unexpected `NaN` values outside documented rolling warm-up windows. Duplicate input column labels are rejected so the exported schema remains unambiguous. H1 export filenames include microseconds to avoid same-second run collisions.
 
 ### H1 indicator conventions
 
@@ -90,7 +90,7 @@ For reproducibility, the current feature implementation uses these conventions:
 
 - `sma_5` / `sma_10`: simple rolling means of close over 5 and 10 bars.
 - `ema_5` / `ema_10`: exponential moving averages with `adjust=False`.
-- `rsi_14`: 14-bar simple rolling means of positive and negative close changes. It is not Wilder-smoothed RSI; a flat window is assigned 50 and a window with gains but no losses is assigned 100.
+- `rsi_14`: 14-bar simple rolling means of positive and negative close changes. It is not Wilder-smoothed RSI; a flat window is assigned 50 and a window with gains but no losses is assigned 100. The first complete 14-change window appears after the initial price-change warm-up row.
 - `atr_14`: 14-bar simple rolling mean of True Range, not Wilder-smoothed ATR.
 - `macd`: EMA(12) minus EMA(26); `macd_signal` is the 9-bar EMA of MACD.
 - Bollinger bands: 20-bar simple mean plus/minus two rolling sample standard deviations.
