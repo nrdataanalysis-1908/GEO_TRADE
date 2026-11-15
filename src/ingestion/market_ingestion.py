@@ -432,6 +432,7 @@ def main():
         return 1
     output = _build_output_path(args.output_dir, args.date)
     connected = False
+    shutdown_failed = False
     frames, stats = [], {"with_data": 0, "without_data": 0, "errors": 0, "rejected": 0}
     try:
         if not mt5.initialize(path=args.terminal_path, timeout=120000):
@@ -483,7 +484,7 @@ def main():
         print(CYAN + f"Exported {len(market)} candles to {output}")
         print(CYAN + f"Symbols with data={stats['with_data']} | without={stats['without_data']} "
                      f"| errors={stats['errors']} | rejected rows={stats['rejected']}")
-        return 1 if stats["errors"] else 0
+        return 1 if stats["errors"] or shutdown_failed else 0
     except Exception as exc:
         print(RED + f"FATAL: {exc}")
         return 1
@@ -493,6 +494,7 @@ def main():
                 mt5.shutdown()
                 print(CYAN + "MT5 connection closed.")
             except Exception as exc:
+                shutdown_failed = True
                 print(YELLOW + f"MT5 shutdown failed: {exc}")
 
 
