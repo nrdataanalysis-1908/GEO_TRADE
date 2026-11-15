@@ -214,9 +214,35 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     }.items():
         df[col] = value
 
-    numeric_features = df.select_dtypes(include=[np.number])
-    if np.isinf(numeric_features.to_numpy(dtype=float)).any():
-        raise ValueError("feature calculations produced non-finite numeric values")
+    # Rolling indicators intentionally contain NaN only during their documented
+    # warm-up prefixes. Any later NaN, as well as any infinity, signals numeric
+    # instability and must not leak into the exported feature set.
+    warmup_nan_prefix = {
+        "return": 1,
+        "return_pct": 1,
+        "sma_5": 4,
+        "sma_10": 9,
+        "rsi_14": 14,
+        "atr_14": 13,
+        "bollinger_middle": 19,
+        "bollinger_upper": 19,
+        "bollinger_lower": 19,
+        "volatility_10": 10,
+        "volatility_pct": 10,
+    }
+    derived_numeric_columns = (
+        "time", "open", "high", "low", "close",
+        "range", "body", "body_abs", "upper_wick", "lower_wick",
+        "return", "return_pct", "sma_5", "sma_10", "ema_5", "ema_10",
+        "rsi_14", "atr_14", "macd", "macd_signal", "macd_histogram",
+        "bollinger_middle", "bollinger_upper", "bollinger_lower",
+        "volatility_10", "volatility_pct",
+    )
+    for column in derived_numeric_columns:
+        values = df[column].to_numpy(dtype=float)
+        allowed_prefix = warmup_nan_prefix.get(column, 0)
+        if np.isinf(values).any() or np.isnan(values[allowed_prefix:]).any():
+            raise ValueError("feature calculations produced non-finite numeric values")
 
     return df.sort_values("timestamp_utc").reset_index(drop=True)
 
