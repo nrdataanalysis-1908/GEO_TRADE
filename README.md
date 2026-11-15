@@ -112,6 +112,7 @@ Key behaviors:
 - Upserts instrument metadata without replacing the parent row.
 - Reports processed instruments, candles found/inserted, errors and database totals; rejected market records can be inspected in the per-symbol output.
 - Can optionally open DB Browser for SQLite after the run.
+- Returns a non-zero process exit status when SQLite connection close or MT5 shutdown fails, even if candle processing completed.
 
 Example (PowerShell):
 
