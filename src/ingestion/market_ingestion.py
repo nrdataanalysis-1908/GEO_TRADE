@@ -114,9 +114,10 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     missing = [column for column in required if column not in rates.columns]
     if missing:
         raise ValueError(f"Missing required feature columns: {', '.join(missing)}")
-    duplicates = [column for column in required if list(rates.columns).count(column) > 1]
+    duplicates = rates.columns[rates.columns.duplicated()].tolist()
     if duplicates:
-        raise ValueError(f"Duplicate feature columns: {', '.join(duplicates)}")
+        labels = ", ".join(str(column) for column in duplicates)
+        raise ValueError(f"Duplicate feature columns: {labels}")
     if rates.empty:
         raise ValueError("rates must contain at least one market bar")
 
