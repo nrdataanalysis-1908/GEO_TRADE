@@ -54,6 +54,15 @@ def utc_bounds(day_text):
     return start, end
 
 
+def _build_output_path(output_dir, day_text, timestamp=None):
+    """Build a collision-resistant H1 export path for one execution."""
+    timestamp = timestamp or datetime.now()
+    stamp = timestamp.strftime("%Y%m%d_%H%M%S_%f")
+    return Path(output_dir) / (
+        f"GEO_TRADE_MARKET_H1_DAY_{day_text.replace('-', '')}_{stamp}.csv"
+    )
+
+
 def validate_symbols(symbols):
     """Validate an explicit H1 symbol list without changing its order."""
     if symbols is None:
@@ -421,9 +430,7 @@ def main():
     except OSError as exc:
         print(RED + f"Cannot create output directory {args.output_dir}: {exc}")
         return 1
-    output = args.output_dir / (
-        f"GEO_TRADE_MARKET_H1_DAY_{args.date.replace('-', '')}_"
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    output = _build_output_path(args.output_dir, args.date)
     connected = False
     frames, stats = [], {"with_data": 0, "without_data": 0, "errors": 0, "rejected": 0}
     try:
