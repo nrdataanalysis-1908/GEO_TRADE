@@ -293,8 +293,8 @@ def test_rsi_assigns_neutral_value_to_a_flat_market_window():
 
     result = add_features(rates, "EURUSD")
 
-    assert result["rsi_14"].iloc[:13].isna().all()
-    assert (result["rsi_14"].iloc[13:] == 50).all()
+    assert result["rsi_14"].iloc[:14].isna().all()
+    assert (result["rsi_14"].iloc[14:] == 50).all()
 
 
 def test_add_features_rejects_complex_market_prices():
@@ -358,8 +358,14 @@ def test_feature_warmup_preserves_only_documented_rolling_null_windows():
     assert result["sma_5"].iloc[4:].notna().all()
     assert result["sma_10"].iloc[:9].isna().all()
     assert result["sma_10"].iloc[9:].notna().all()
-    assert result["rsi_14"].iloc[:13].isna().all()
-    assert result["rsi_14"].iloc[13:].notna().all()
+    assert result["return"].iloc[:1].isna().all()
+    assert result["return"].iloc[1:].notna().all()
+    assert result["return_pct"].iloc[:1].isna().all()
+    assert result["return_pct"].iloc[1:].notna().all()
+    assert result["volatility_10"].iloc[:10].isna().all()
+    assert result["volatility_10"].iloc[10:].notna().all()
+    assert result["rsi_14"].iloc[:14].isna().all()
+    assert result["rsi_14"].iloc[14:].notna().all()
     assert result["atr_14"].iloc[:13].isna().all()
     assert result["atr_14"].iloc[13:].notna().all()
     assert result["bollinger_middle"].iloc[:19].isna().all()
@@ -402,7 +408,7 @@ def test_rsi_reaches_expected_boundaries_for_one_directional_market():
         rates["low"] = close - 0.001
 
         result = add_features(rates, "EURUSD")
-        assert (result["rsi_14"].iloc[13:] == expected).all()
+        assert (result["rsi_14"].iloc[14:] == expected).all()
 
 def test_atr_uses_previous_close_for_true_range_gaps():
     rates = sample_rates().iloc[:15].copy()
