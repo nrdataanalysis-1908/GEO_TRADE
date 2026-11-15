@@ -611,7 +611,7 @@ def main():
 
     conn = None
     mt5_inicializado = False
-    shutdown_failed = False
+    cleanup_failed = False
     inicio_execucao = time.time()
 
     processados = 0
@@ -774,6 +774,7 @@ def main():
                 conn.close()
                 print(CIANO + "✓ Conexao SQLite encerrada")
             except Exception as erro_fechamento:
+                cleanup_failed = True
                 print(AMARELO + f"⚠ Falha ao fechar SQLite: {erro_fechamento}")
 
         if mt5_inicializado:
@@ -781,7 +782,7 @@ def main():
                 mt5.shutdown()
                 print(CIANO + "✓ MetaTrader 5 encerrado")
             except Exception as erro_encerramento:
-                shutdown_failed = True
+                cleanup_failed = True
                 print(AMARELO + f"⚠ Falha ao encerrar MT5: {erro_encerramento}")
 
     if not args.no_open_db and db_path.exists():
@@ -791,7 +792,7 @@ def main():
     print(AZUL + "═" * 80)
     print(AZUL + " GEO_TRADE | PROCESSO FINALIZADO ")
     print(AZUL + "═" * 80)
-    return 1 if erros or shutdown_failed else 0
+    return 1 if erros or cleanup_failed else 0
 
 
 if __name__ == "__main__":
