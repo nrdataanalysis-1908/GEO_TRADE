@@ -730,8 +730,9 @@ def main():
                 conn.rollback()
                 erros += 1
                 print(VERMELHO + f"   ✗ ERRO NO ATIVO {symbol}: {erro_ativo}")
-
-            time.sleep(PAUSA_ATIVO)
+            finally:
+                # Keep the per-symbol throttle even when a branch uses continue.
+                time.sleep(PAUSA_ATIVO)
 
         conn.commit()
         total_banco, ativos_banco = mostrar_validacao(conn, data_alvo)
