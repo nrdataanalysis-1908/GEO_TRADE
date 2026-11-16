@@ -166,6 +166,11 @@ Os testes automatizados cobrem o cálculo cronológico de atributos, os controle
 - [ ] Testes retrospectivos com taxas, spread, derrapagem e avaliação progressiva no tempo.
 - [ ] Experimentos de aprendizado de máquina com controles contra vazamento de dados, registro de modelos e monitoramento de deriva.
 
+
+## Contrato de atributos H1
+
+As janelas de aquecimento, fórmulas dos indicadores, regras de validação e convenções temporais estão descritas no [contrato de atributos H1](docs/h1-feature-contract.md).
+
 ## Segurança
 
 Nunca envie ao repositório credenciais de corretoras, senhas, chaves de API, arquivos `.env`, diretórios de dados do terminal, identificadores de contas ou conjuntos de dados privados brutos. Utilize dados públicos de exemplo em demonstrações.

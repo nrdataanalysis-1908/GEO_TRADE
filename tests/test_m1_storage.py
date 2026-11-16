@@ -6,6 +6,7 @@ import numpy as np
 from src.ingestion.trade2_geo_trade_v2 import (
     FUSO_BRASILIA,
     gravar_candles,
+    gravar_metadados_ativo,
     obter_intervalo_utc,
     preparar_banco,
     validar_candle,
@@ -46,6 +47,95 @@ def test_candle_accepts_sqlite_signed_integer_upper_bound():
         "tick_volume": 2**63 - 1, "spread": 2, "real_volume": 0,
     }
     assert validar_candle(candle) is True
+
+
+def test_integral_numeric_strings_are_validated_and_persisted_consistently(tmp_path):
+    database = preparar_banco(tmp_path / "numeric-strings.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        candle = {
+            "time": "1700000000.0",
+            "open": "1.1", "high": "1.3", "low": "1.0", "close": "1.2",
+            "tick_volume": "10.0", "spread": "2.0", "real_volume": "0.0",
+        }
+
+        assert validar_candle(candle) is True
+        result = gravar_candles(database.cursor(), "EURUSD", [candle], start, end)
+        database.commit()
+        persisted = database.execute(
+            "SELECT tick_volume, spread, real_volume FROM candles"
+        ).fetchone()
+
+        assert result["inseridos"] == 1
+        assert tuple(persisted) == (10, 2, 0)
+    finally:
+        database.close()
+
+
+def test_candle_rejects_scientific_counter_overflow_without_raising():
+    candle = {
+        "time": 1_700_000_000,
+        "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+        "tick_volume": "1e308", "spread": 2, "real_volume": 0,
+    }
+    assert validar_candle(candle) is False
+
+
+def test_asset_created_at_preserves_initial_registration_timestamp(tmp_path):
+    from types import SimpleNamespace
+
+    database = preparar_banco(tmp_path / "metadata.db")
+    try:
+        cursor = database.cursor()
+        gravar_metadados_ativo(
+            cursor, SimpleNamespace(name="EURUSD", description="initial")
+        )
+        database.commit()
+        original_timestamp = "2020-01-01T00:00:00+00:00"
+        database.execute(
+            "UPDATE ativos SET created_at = ? WHERE symbol = ?",
+            (original_timestamp, "EURUSD"),
+        )
+        database.commit()
+
+        gravar_metadados_ativo(
+            cursor, SimpleNamespace(name="EURUSD", description="refreshed")
+        )
+        database.commit()
+        row = database.execute(
+            "SELECT created_at, description FROM ativos WHERE symbol = ?",
+            ("EURUSD",),
+        ).fetchone()
+
+        assert row[0] == original_timestamp
+        assert row[1] == "refreshed"
+    finally:
+        database.close()
+
+
+def test_candle_persistence_preserves_sqlite_signed_integer_upper_bound(tmp_path):
+    database = preparar_banco(tmp_path / "integer-bound.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        candle = {
+            "time": 1_700_000_000,
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 2**63 - 1, "spread": 2, "real_volume": 0,
+        }
+        result = gravar_candles(
+            database.cursor(), "EURUSD", [candle], start, end
+        )
+        database.commit()
+        persisted = database.execute(
+            "SELECT tick_volume FROM candles"
+        ).fetchone()[0]
+
+        assert result["inseridos"] == 1
+        assert persisted == 2**63 - 1
+    finally:
+        database.close()
 
 
 def test_brasilia_calendar_day_is_converted_to_utc():
@@ -185,3 +275,118 @@ def test_candle_rejects_boolean_timestamp_and_counters(field):
 def test_brasilia_date_parser_rejects_non_calendar_formats(value):
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
         obter_intervalo_utc(value)
+
+
+def test_candle_persistence_accepts_one_shot_generator(tmp_path):
+    database = preparar_banco(tmp_path / "generator.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        candle = {
+            "time": int((start + timedelta(minutes=1)).timestamp()),
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+
+        result = gravar_candles(
+            database.cursor(), "EURUSD", (item for item in [candle]), start, end
+        )
+        database.commit()
+
+        assert result["encontrados"] == 1
+        assert result["inseridos"] == 1
+        assert database.execute("SELECT COUNT(*) FROM candles").fetchone()[0] == 1
+    finally:
+        database.close()
+
+
+@pytest.mark.parametrize("rates", ["not-candle-records", b"not-candle-records", {"time": 1}])
+def test_candle_persistence_rejects_text_and_mapping_containers(rates):
+    start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+
+    with pytest.raises(ValueError, match="iterable of candle records"):
+        gravar_candles(None, "EURUSD", rates, start, end)
+
+
+def test_candle_persistence_rejects_conflicting_duplicate_timestamp_group(tmp_path):
+    database = preparar_banco(tmp_path / "batch-conflict.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        timestamp = int((start + timedelta(minutes=1)).timestamp())
+        first = {
+            "time": timestamp,
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+        conflicting = {**first, "close": 1.25, "high": 1.3}
+
+        result = gravar_candles(
+            database.cursor(), "EURUSD", [first, conflicting], start, end
+        )
+        database.commit()
+
+        assert result["encontrados"] == 0
+        assert result["inseridos"] == 0
+        assert result["rejeitados"] == 2
+        assert database.execute("SELECT COUNT(*) FROM candles").fetchone()[0] == 0
+    finally:
+        database.close()
+
+
+def test_candle_persistence_reports_existing_database_conflict_without_overwrite(tmp_path):
+    database = preparar_banco(tmp_path / "persisted-conflict.db")
+    try:
+        start = datetime(2023, 11, 14, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        timestamp = int((start + timedelta(minutes=1)).timestamp())
+        original = {
+            "time": timestamp,
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+        revised = {**original, "close": 1.25, "high": 1.3}
+
+        first = gravar_candles(database.cursor(), "EURUSD", [original], start, end)
+        database.commit()
+        second = gravar_candles(database.cursor(), "EURUSD", [revised], start, end)
+        database.commit()
+        stored_close = database.execute(
+            "SELECT close FROM candles WHERE symbol = ?", ("EURUSD",)
+        ).fetchone()[0]
+
+        assert first["inseridos"] == 1
+        assert second["inseridos"] == 0
+        assert second["conflitos_banco"] == 1
+        assert second["rejeitados"] == 1
+        assert stored_close == pytest.approx(1.2)
+    finally:
+        database.close()
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (datetime(2023, 11, 14), datetime(2023, 11, 15, tzinfo=timezone.utc)),
+        (
+            datetime(2023, 11, 15, tzinfo=timezone.utc),
+            datetime(2023, 11, 14, tzinfo=timezone.utc),
+        ),
+    ],
+)
+def test_candle_persistence_rejects_invalid_utc_bounds_before_consuming_rates(start, end):
+    consumed = []
+
+    def rates():
+        consumed.append(True)
+        yield {
+            "time": 1_700_000_000,
+            "open": 1.1, "high": 1.3, "low": 1.0, "close": 1.2,
+            "tick_volume": 10, "spread": 2, "real_volume": 0,
+        }
+
+    with pytest.raises(ValueError, match="UTC-aware|later than"):
+        gravar_candles(None, "EURUSD", rates(), start, end)
+
+    assert consumed == []
