@@ -145,3 +145,7 @@ Each symbol is committed independently. If the operator interrupts extraction wh
 MT5 symbol lookup, symbol selection and history-query failures count as execution errors and produce a non-zero process exit status. An empty history response is treated separately as a symbol with no data.
 
 When a timestamp already exists in SQLite, an identical candle is treated as an idempotent replay. A different OHLCV payload for the same natural key is not allowed to overwrite the stored candle; it is counted and reported as a persisted-data conflict. Review such conflicts before any controlled backfill or database correction.
+
+## Database path safety
+
+The final SQLite destination must be a regular file or a path that does not yet exist. Symbolic-link destinations and existing non-regular filesystem objects are rejected before SQLite opens the path. The CLI preserves the lexical absolute path instead of resolving the final symlink, so the guard can inspect the operator-supplied destination and avoid modifying an external target.
