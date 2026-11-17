@@ -164,6 +164,10 @@ def obter_intervalo_utc(data_informada=None):
 
 def preparar_banco(db_path):
     db_path = Path(db_path)
+    if db_path.is_symlink():
+        raise ValueError("database path must not be a symbolic link")
+    if db_path.exists() and not db_path.is_file():
+        raise ValueError("database path must be a regular file")
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path), timeout=30)
@@ -593,7 +597,7 @@ def main():
         print(VERMELHO + "✗ Data invalida. Utilize o formato YYYY-MM-DD.")
         return 2
 
-    db_path = Path(args.db_path).expanduser().resolve()
+    db_path = Path(args.db_path).expanduser().absolute()
 
     print()
     print(AZUL + "╔" + "═" * 78 + "╗")
