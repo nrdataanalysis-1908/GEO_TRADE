@@ -253,8 +253,17 @@ def gravar_metadados_ativo(cursor, info):
             if not math.isfinite(number) or number < 0:
                 raise ValueError(f"{field} must be finite and non-negative")
             numeric_values[field] = number
-        if numeric_values["volume_max"] > 0 and numeric_values["volume_min"] > numeric_values["volume_max"]:
+        volume_min = numeric_values["volume_min"]
+        volume_max = numeric_values["volume_max"]
+        volume_step = numeric_values["volume_step"]
+        if volume_min > 0 and volume_max <= 0:
+            raise ValueError("volume_max must be positive when volume_min is positive")
+        if volume_max > 0 and volume_min > volume_max:
             raise ValueError("volume_min cannot exceed volume_max")
+        if volume_min > 0 and volume_step <= 0:
+            raise ValueError("volume_step must be positive when volume_min is positive")
+        if volume_max > 0 and volume_step > volume_max:
+            raise ValueError("volume_step cannot exceed volume_max")
         text_values = {}
         for field in ("description", "path", "currency_base", "currency_profit", "currency_margin"):
             raw = getattr(info, field, "")
