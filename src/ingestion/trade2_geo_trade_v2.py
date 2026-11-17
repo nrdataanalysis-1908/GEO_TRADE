@@ -243,8 +243,8 @@ def gravar_metadados_ativo(cursor, info):
             raw = getattr(info, field, 0)
             if raw is None:
                 raw = 0
-            if isinstance(raw, (bool, np.bool_)):
-                raise ValueError(f"{field} must be numeric")
+            if isinstance(raw, (bool, np.bool_, complex, np.complexfloating)):
+                raise ValueError(f"{field} must be a real numeric value")
             number = float(raw)
             if not math.isfinite(number) or number < 0:
                 raise ValueError(f"{field} must be finite and non-negative")
@@ -313,10 +313,10 @@ def validar_candle(candle):
         ):
             return False
         timestamp = int(timestamp_decimal)
-        abertura = float(candle["open"])
-        maxima = float(candle["high"])
-        minima = float(candle["low"])
-        fechamento = float(candle["close"])
+        raw_precos = tuple(candle[key] for key in ("open", "high", "low", "close"))
+        if any(isinstance(value, (complex, np.complexfloating)) for value in raw_precos):
+            return False
+        abertura, maxima, minima, fechamento = (float(value) for value in raw_precos)
         raw_contadores = tuple(
             candle[key] for key in ("tick_volume", "spread", "real_volume")
         )
