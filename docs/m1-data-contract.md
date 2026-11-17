@@ -112,3 +112,7 @@ WHERE high < MAX(open, close)
 ## Scope
 
 This contract documents the current M1 SQLite schema only. It does not imply that data lineage manifests, broker correction handling, schema migrations, retention policies or automated quality gates are already implemented.
+
+## Numeric input constraints
+
+OHLC prices and numeric instrument metadata must be real finite values. Python complex numbers and NumPy complex scalars are rejected before float conversion; their imaginary components are never silently discarded. Boolean values are also invalid for prices, counters and numeric broker metadata.
