@@ -29,6 +29,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _has_control_characters(value):
     return any(unicodedata.category(character) in {"Cc", "Cf"} for character in value)
+
+
+def _has_spreadsheet_formula_prefix(value):
+    return value.startswith(("=", "+", "-", "@"))
 DEFAULT_TERMINAL = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 
 
@@ -77,9 +81,10 @@ def validate_symbols(symbols):
             or not symbol.strip()
             or symbol != symbol.strip()
             or _has_control_characters(symbol)
+            or _has_spreadsheet_formula_prefix(symbol)
         ):
             raise ValueError(
-                "each symbol must be a non-empty trimmed string without control characters"
+                "each symbol must be a non-empty trimmed string without control characters or spreadsheet formula prefixes"
             )
         if symbol in seen:
             raise ValueError(f"duplicate symbol argument: {symbol}")
@@ -112,13 +117,15 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     if (
         not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip()
         or _has_control_characters(symbol)
+        or _has_spreadsheet_formula_prefix(symbol)
     ):
-        raise ValueError("symbol must be a non-empty trimmed string without control characters")
+        raise ValueError("symbol must be a non-empty trimmed string without control characters or spreadsheet formula prefixes")
     if (
         not isinstance(timeframe, str) or not timeframe.strip() or timeframe != timeframe.strip()
         or _has_control_characters(timeframe)
+        or _has_spreadsheet_formula_prefix(timeframe)
     ):
-        raise ValueError("timeframe must be a non-empty trimmed string without control characters")
+        raise ValueError("timeframe must be a non-empty trimmed string without control characters or spreadsheet formula prefixes")
     required = ("time", "open", "high", "low", "close")
     missing = [column for column in required if column not in rates.columns]
     if missing:
