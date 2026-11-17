@@ -300,9 +300,10 @@ def validate_rates(rates):
     missing = sorted(set(required) - set(rates.columns))
     if missing:
         raise ValueError(f"Missing required market columns: {', '.join(missing)}")
-    duplicates = sorted(set(rates.columns[rates.columns.duplicated()].tolist()))
+    duplicates = set(rates.columns[rates.columns.duplicated()].tolist())
     if duplicates:
-        raise ValueError(f"Duplicate market columns: {', '.join(duplicates)}")
+        labels = ", ".join(str(label) for label in sorted(duplicates, key=str))
+        raise ValueError(f"Duplicate market columns: {labels}")
 
     clean = rates.copy().reset_index(drop=True)
     boolean_rows = clean[required].apply(
