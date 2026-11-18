@@ -72,6 +72,48 @@ class _NormalTerminal:
         return None
 
 
+def test_m1_main_does_not_open_db_browser_after_sqlite_close_failure(
+    monkeypatch, tmp_path
+):
+    terminal = _NormalTerminal()
+    original_prepare = m1.preparar_banco
+    opened = []
+
+    class _CloseFailingConnection:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        def close(self):
+            self.connection.close()
+            raise RuntimeError("simulated SQLite close failure")
+
+    monkeypatch.setattr(m1, "mt5", terminal)
+    monkeypatch.setattr(m1.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        m1,
+        "parse_args",
+        lambda: Namespace(
+            data_alvo="2026-11-03",
+            terminal_path="unused",
+            db_path=str(tmp_path / "market.db"),
+            symbols=None,
+            no_open_db=False,
+        ),
+    )
+    monkeypatch.setattr(
+        m1,
+        "preparar_banco",
+        lambda path: _CloseFailingConnection(original_prepare(path)),
+    )
+    monkeypatch.setattr(m1, "abrir_db_browser", lambda path: opened.append(path))
+
+    assert m1.main() == 1
+    assert opened == []
+
+
 def test_m1_main_returns_nonzero_when_sqlite_close_fails(
     monkeypatch, tmp_path
 ):
