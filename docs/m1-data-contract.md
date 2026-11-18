@@ -116,4 +116,4 @@ This contract documents the current M1 SQLite schema only. It does not imply tha
 ## Numeric input constraints
 
 OHLC prices and numeric instrument metadata must be real finite values. Python complex numbers and NumPy complex scalars are rejected before float conversion; their imaginary components are never silently discarded. Boolean values are also invalid for prices, counters and numeric broker metadata.
-Broker volume metadata must form a coherent constraint set. When `volume_min` is positive, `volume_max` and `volume_step` must also be positive; `volume_min` cannot exceed `volume_max`, and `volume_step` cannot exceed the maximum. All three values remain finite and non-negative before persistence.
+Broker volume metadata must form a coherent constraint set. When `volume_min` is positive, `volume_max` must also be positive. Whenever `volume_max` is positive, `volume_step` must be positive even if the reported minimum is zero. `volume_min` cannot exceed `volume_max`, and `volume_step` cannot exceed the maximum. All three values remain finite and non-negative before persistence.
