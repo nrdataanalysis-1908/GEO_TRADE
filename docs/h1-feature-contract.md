@@ -55,3 +55,7 @@ Falhas ao encerrar a sessão MT5 ou fechar a conexão SQLite devem ser refletida
 
 Os identificadores textuais usados na exportação (`symbol` e `timeframe`) não podem começar com `=`, `+`, `-` ou `@`. Esses prefixos são interpretados como fórmulas por planilhas eletrônicas; a validação os rejeita antes da engenharia de atributos e da publicação do CSV. Caracteres de controle e formatação continuam proibidos.
 Os rótulos duplicados são identificados independentemente do tipo do rótulo. A mensagem de validação converte os nomes para texto e usa ordenação determinística, evitando que uma coluna auxiliar não textual provoque `TypeError` durante o diagnóstico.
+
+## Identificador determinístico do candle
+
+`candle_id` codifica símbolo e timeframe com prefixos de comprimento antes de anexar o timestamp UTC. A representação é inequívoca mesmo quando ambos os identificadores contêm sublinhados ou outros separadores; pares distintos de símbolo/timeframe não podem produzir o mesmo identificador apenas por concatenação ambígua.
