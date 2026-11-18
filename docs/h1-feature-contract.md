@@ -59,3 +59,8 @@ Os rótulos duplicados são identificados independentemente do tipo do rótulo. 
 ## Identificador determinístico do candle
 
 `candle_id` codifica símbolo e timeframe com prefixos de comprimento antes de anexar o timestamp UTC. A representação é inequívoca mesmo quando ambos os identificadores contêm sublinhados ou outros separadores; pares distintos de símbolo/timeframe não podem produzir o mesmo identificador apenas por concatenação ambígua.
+
+
+## Descoberta de instrumentos
+
+Quando a lista de instrumentos é obtida do terminal MT5, nomes repetidos são deduplicados preservando a primeira ocorrência antes das consultas históricas. Isso evita chamadas redundantes, dupla contagem nos indicadores operacionais e linhas repetidas que seriam descartadas apenas na etapa final de exportação. Listas informadas explicitamente pelo usuário continuam sujeitas à validação estrita de duplicidade.
