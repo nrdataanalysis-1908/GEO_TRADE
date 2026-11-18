@@ -149,3 +149,7 @@ When a timestamp already exists in SQLite, an identical candle is treated as an 
 ## Database path safety
 
 The final SQLite destination must be a regular file or a path that does not yet exist. Symbolic-link destinations and existing non-regular filesystem objects are rejected before SQLite opens the path. The CLI preserves the lexical absolute path instead of resolving the final symlink, so the guard can inspect the operator-supplied destination and avoid modifying an external target.
+
+## Cleanup before opening the database UI
+
+DB Browser is launched only when the SQLite connection and the MT5 session have both completed cleanup successfully. If either close operation fails, the process returns a non-zero status and leaves the database UI closed so that an unresolved file handle or lock is not obscured by a second process opening the database.
