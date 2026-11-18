@@ -260,8 +260,8 @@ def gravar_metadados_ativo(cursor, info):
             raise ValueError("volume_max must be positive when volume_min is positive")
         if volume_max > 0 and volume_min > volume_max:
             raise ValueError("volume_min cannot exceed volume_max")
-        if volume_min > 0 and volume_step <= 0:
-            raise ValueError("volume_step must be positive when volume_min is positive")
+        if volume_max > 0 and volume_step <= 0:
+            raise ValueError("volume_step must be positive when volume_max is positive")
         if volume_max > 0 and volume_step > volume_max:
             raise ValueError("volume_step cannot exceed volume_max")
         text_values = {}
