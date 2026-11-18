@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import tempfile
 import re
@@ -402,6 +404,39 @@ def collect_symbol(symbol, start, end):
 
 
 
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_json_atomically(payload, destination):
+    """Publish strict JSON metadata without replacing a previous file on failure."""
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(
+                payload, stream, ensure_ascii=False, indent=2,
+                sort_keys=True, allow_nan=False,
+            )
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_name, destination)
+    except Exception:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def _write_csv_atomically(frame, destination, columns):
     """Publish a complete CSV or leave the previous destination untouched."""
     destination = Path(destination)
@@ -446,7 +481,10 @@ def main():
     connected = False
     shutdown_failed = False
     exit_status = 1
-    frames, stats = [], {"with_data": 0, "without_data": 0, "errors": 0, "rejected": 0}
+    frames, stats = [], {
+        "with_data": 0, "without_data": 0, "errors": 0, "rejected": 0,
+        "failed_symbols": [],
+    }
     try:
         if not mt5.initialize(path=args.terminal_path, timeout=120000):
             raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
@@ -476,6 +514,7 @@ def main():
                 stats["rejected"] += rejected
                 if error:
                     stats["errors"] += 1
+                    stats["failed_symbols"].append(symbol)
                     print(RED + f"✗ [{i}/{len(symbols)}] {symbol}: {error}")
                 elif frame is None:
                     stats["without_data"] += 1
@@ -486,6 +525,7 @@ def main():
                     print(CYAN + f"✓ [{i}/{len(symbols)}] {symbol}: {len(frame)} candles")
             except Exception as exc:
                 stats["errors"] += 1
+                stats["failed_symbols"].append(symbol)
                 print(RED + f"✗ {symbol}: {exc}")
         if not frames:
             print(RED + "No data collected; CSV not created.")
@@ -502,6 +542,27 @@ def main():
             "bollinger_middle", "bollinger_lower", "volatility_10", "volatility_pct",
             "hour", "day_of_week", "day_of_month", "month"]
         _write_csv_atomically(market, output, columns)
+        manifest = {
+            "schema_version": 1,
+            "status": (
+                "partial" if stats["errors"]
+                else "degraded" if stats["rejected"]
+                else "complete"
+            ),
+            "timeframe": TIMEFRAME_NAME,
+            "date_utc": args.date,
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "csv_file": output.name,
+            "csv_sha256": _sha256_file(output),
+            "rows_exported": int(len(market)),
+            "symbols_requested": len(symbols),
+            "symbols_with_data": stats["with_data"],
+            "symbols_without_data": stats["without_data"],
+            "symbols_with_errors": stats["errors"],
+            "failed_symbols": stats["failed_symbols"],
+            "rejected_rows": stats["rejected"],
+        }
+        _write_json_atomically(manifest, output.with_suffix(".manifest.json"))
         print(CYAN + f"Exported {len(market)} candles to {output}")
         print(CYAN + f"Symbols with data={stats['with_data']} | without={stats['without_data']} "
                      f"| errors={stats['errors']} | rejected rows={stats['rejected']}")
