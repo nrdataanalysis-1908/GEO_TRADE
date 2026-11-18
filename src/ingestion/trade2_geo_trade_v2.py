@@ -799,7 +799,7 @@ def main():
                 cleanup_failed = True
                 print(AMARELO + f"⚠ Falha ao encerrar MT5: {erro_encerramento}")
 
-    if not args.no_open_db and db_path.exists():
+    if not cleanup_failed and not args.no_open_db and db_path.exists():
         abrir_db_browser(db_path)
 
     print()
