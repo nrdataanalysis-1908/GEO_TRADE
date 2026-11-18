@@ -64,3 +64,8 @@ Os rótulos duplicados são identificados independentemente do tipo do rótulo. 
 ## Descoberta de instrumentos
 
 Quando a lista de instrumentos é obtida do terminal MT5, nomes repetidos são deduplicados preservando a primeira ocorrência antes das consultas históricas. Isso evita chamadas redundantes, dupla contagem nos indicadores operacionais e linhas repetidas que seriam descartadas apenas na etapa final de exportação. Listas informadas explicitamente pelo usuário continuam sujeitas à validação estrita de duplicidade.
+
+
+## Manifesto de integridade da exportação
+
+Cada CSV publicado recebe um arquivo `.manifest.json` adjacente com versão do esquema, data UTC, timeframe, nome e SHA-256 do CSV, linhas exportadas e contagens de instrumentos com dados, sem dados ou com erro. O status é `complete`, `degraded` (linhas rejeitadas) ou `partial` (falha em pelo menos um instrumento). Assim, um CSV parcial não depende apenas do código de saída do processo para ser identificado por consumidores posteriores. O manifesto é gravado por substituição atômica e rejeita valores JSON não finitos.
