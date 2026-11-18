@@ -183,8 +183,12 @@ def add_features(rates, symbol, timeframe=TIMEFRAME_NAME):
     df["timestamp_utc"] = pd.to_datetime(df["time"], unit="s", utc=True)
     df["timestamp_brasilia"] = df["timestamp_utc"].dt.tz_convert("America/Sao_Paulo")
     df["symbol"], df["timeframe"] = symbol, timeframe
-    df["candle_id"] = (df["symbol"] + "_" + df["timeframe"] + "_" +
-                       df["timestamp_utc"].dt.strftime("%Y%m%d%H%M%S"))
+    symbol_component = df["symbol"].map(lambda value: f"{len(value)}:{value}")
+    timeframe_component = df["timeframe"].map(lambda value: f"{len(value)}:{value}")
+    df["candle_id"] = (
+        symbol_component + "|" + timeframe_component + "|"
+        + df["timestamp_utc"].dt.strftime("%Y%m%d%H%M%S")
+    )
     df["range"] = df["high"] - df["low"]
     df["body"] = df["close"] - df["open"]
     df["body_abs"] = df["body"].abs()
