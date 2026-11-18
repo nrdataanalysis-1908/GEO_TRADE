@@ -461,7 +461,15 @@ def main():
             found = mt5.symbols_get()
             if found is None:
                 raise RuntimeError(f"symbols_get failed: {mt5.last_error()}")
-            symbols = [item.name for item in found]
+            symbols = []
+            seen_symbols = set()
+            for item in found:
+                symbol = getattr(item, "name", None)
+                if isinstance(symbol, str):
+                    if symbol in seen_symbols:
+                        continue
+                    seen_symbols.add(symbol)
+                symbols.append(symbol)
         for i, symbol in enumerate(symbols, 1):
             try:
                 frame, rejected, error = collect_symbol(symbol, start, end)
